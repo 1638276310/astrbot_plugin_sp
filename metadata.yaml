@@ -1,0 +1,28 @@
+name: astrbot_plugin_sp
+display_name: 涩批
+short_desc: 涩批插件 AstrBot 版：P站图 / 磁力 / 妹子图 / 美图吧 / 网址导航 / 订阅推送
+desc: |
+  涩批插件（原 TRSS-Yunzai 版 sp-plugin）的 AstrBot Python 重构版。
+
+  每个功能都拆分为独立的 Python 文件，主入口 main.py 只负责组装。
+
+  功能一览：
+  - 帮助：#涩批文字帮助 / #涩批图片帮助
+  - 网址导航：#写真网址 #福利网址 #吃瓜网址 #导航网址 #福利App #TG电报
+  - 妹子图：#写真馆<ID> / #随机写真 / #更新写真ID
+  - P站：#pid<数字> / #随机X张Y作品 / #来X张XX图
+  - 美图吧：#随机美图吧 / #套图详情 <URL> / #更新套图列表 / #全量更新套图列表
+  - 磁力：#磁力猫 <关键词> / #验车<magnet:...>
+  - Cos 图：#2图 / #3图
+  - 视频：#骚鸡 / #烧鸡 / #sj
+  - 订阅推送：#订阅画师<ID> / #取消订阅<ID> / #订阅列表 / #sp推送 / #关闭sp推送
+  - 设置：#开启sp撤回 / #关闭sp撤回 / #设置sp撤回X / #设置R18模式X / #设置图片偏好X
+version: v1.0.0
+author: 寂寞沙洲冷
+repo: https://github.com/1638276310/astrbot_plugin_sp
+astrbot_version: ">=4.5.7"
+tags:
+  - 涩批
+  - pixiv
+  - 磁力
+  - 图片

@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# 插件运行时数据（AstrBot 会写到 data/plugin_data 下，这里只是兜底）
+data/
+temp/
+cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store

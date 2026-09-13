@@ -1,0 +1,258 @@
+{
+  "pixiv_api_base": {
+    "description": "Pixiv 接口地址",
+    "type": "string",
+    "default": "https://pid.kkndp.cn",
+    "hint": "用于 #pid / #随机X张Y作品 / #来X张XX图 的第三方 Pixiv 接口。若接口失效可在此更换。"
+  },
+  "dingyue_api": {
+    "description": "画师订阅接口地址",
+    "type": "string",
+    "default": "https://user.kkndp.cn",
+    "hint": "订阅推送功能使用的接口地址，POST {key, user} 返回 response。"
+  },
+  "dingyue_key": {
+    "description": "画师订阅接口的 key",
+    "type": "string",
+    "default": "",
+    "secret": true,
+    "hint": "原插件读取 Yunzai 的 masterQQ[0]，此处在 WebUI 手动填写。"
+  },
+  "magnet_api": {
+    "description": "验车（磁力详情）接口地址",
+    "type": "string",
+    "default": "https://whatslink.info/api/v1/link",
+    "hint": "形如 https://whatslink.info/api/v1/link?url=<encodeURIComponent(magnet)>。"
+  },
+  "magnet_cat_sites": {
+    "description": "磁力猫镜像站列表",
+    "type": "list",
+    "default": [
+      "https://9rpzb3to.8800591.xyz",
+      "https://rkvbbvso.8800592.xyz",
+      "https://b3tp07ox.8800593.xyz",
+      "https://46ne63ox.8800594.xyz"
+    ],
+    "hint": "依次尝试，拼成 {站点}/search-{关键词}-{文件类型}-{排序}-1.html。"
+  },
+  "mzt_site": {
+    "description": "妹子图站点地址",
+    "type": "string",
+    "default": "https://kkmzt.com"
+  },
+  "mtb_site": {
+    "description": "美图吧（ku1373）站点地址",
+    "type": "string",
+    "default": "https://www.ku1373.cc",
+    "hint": "列表页固定为 {站点}/b/1/。"
+  },
+  "cos_api": {
+    "description": "2图/3图接口地址",
+    "type": "string",
+    "default": "https://img.mengxix.top/",
+    "hint": "实际请求 {地址}?category=acg（二次元）或 ?category=reality（现实）。"
+  },
+  "sp_video_urls": {
+    "description": "骚鸡视频直链列表",
+    "type": "list",
+    "default": [
+      "https://alimov2.a.kwimgs.com/upic/2024/03/06/19/BMjAyNDAzMDYxOTAxMzZfMzM4Nzk3MDMwOF8xMjY2NzUxODQ0ODJfMV8z_b_B507c9ecf6702796d570936abc84a2eb7.mp4?clientCacheKey=3xdrrzrv5njijj4_b.mp4&tt=b&di=78e498d6&bp=13414",
+      "https://txmov2.a.kwimgs.com/upic/2024/03/04/19/BMjAyNDAzMDQxOTE1MzBfMzM4Nzk3MDMwOF8xMjY1Mzk5NjQzNTdfMV8z_b_B10293d5a0c03a1cd548b91c6e436e4f0.mp4?clientCacheKey=3x3bec8s68eec3c_b.mp4&tt=b&di=78e498d6&bp=13414",
+      "https://alimov2.a.kwimgs.com/upic/2022/11/10/18/BMjAyMjExMTAxODMxNTRfMTIzOTM2NTY5M184ODM5ODA4MDgwNl8xXzM=_b_B5740981dba5ce3a90e3aa951ec1225c4.mp4?clientCacheKey=3xxmzky7fwrjgsm_b.mp4&tt=b&di=8eab7ec8&bp=13414",
+      "https://alimov2.a.kwimgs.com/upic/2022/11/04/19/BMjAyMjExMDQxOTQ3NTdfMTIzOTM2NTY5M184Nzk1NjYyNDcyNF8xXzM=_b_B6bc067b9704873bd38e79f38d4ffc9d4.mp4?clientCacheKey=3xwenxju29qrq3a_b.mp4&tt=b&di=8eab7ec8&bp=13414"
+    ]
+  },
+  "url_groups": {
+    "description": "网址导航分组",
+    "type": "object",
+    "hint": "每组对应一个指令，例如 写真 -> #写真网址。可自行增删条目。",
+    "items": {
+      "写真": {
+        "description": "写真网址列表",
+        "type": "list",
+        "default": [
+          "https://kkmzt.com/",
+          "https://dimtown.com/",
+          "https://shaonvzhi.top/",
+          "https://www.chnci.cc/",
+          "https://coser01.com/",
+          "https://rosi73.com/",
+          "https://cosaas.top/",
+          "https://jrants.com/"
+        ]
+      },
+      "福利": {
+        "description": "福利网址列表",
+        "type": "list",
+        "default": [
+          "https://cn.pornhub.com/",
+          "https://www.pixiv.net/",
+          "https://javdb.com/",
+          "https://xiaoyakankan.com/cat/1307.html",
+          "https://www.sex.com/en",
+          "https://jappydolls.net/",
+          "https://t66y.com/"
+        ]
+      },
+      "吃瓜": {
+        "description": "吃瓜网址列表",
+        "type": "list",
+        "default": [
+          "https://www.718yule.com/",
+          "https://slush.cncsbb.com/",
+          "https://drive.cncsbb.com/",
+          "https://fizzy.cncsbb.com/",
+          "https://pc001.bkih1ca5.work/",
+          "https://hl007.okbktyd8.work/",
+          "https://pchl.5r1ilblr.work/",
+          "https://51cg1.com/",
+          "https://ball.bwljkjmd.com/",
+          "https://cake.bwljkjmd.com/",
+          "https://account.bwljkjmd.com/"
+        ]
+      },
+      "导航": {
+        "description": "导航网址列表",
+        "type": "list",
+        "default": [
+          "https://www.xbookcn.net/",
+          "https://tlwblhlc.8800531.xyz/",
+          "https://abhwmcxb.8800532.xyz/",
+          "https://vuonsksu.8800533.xyz/",
+          "https://opryfboh.8800534.xyz/",
+          "https://iqzmsssaabt.007home.cc/",
+          "https://a09.mpmhskx.cc/c/Csn"
+        ]
+      },
+      "福利App": {
+        "description": "福利 App 下载链接列表",
+        "type": "list",
+        "default": [
+          "https://i.meizitu.net/dl/",
+          "https://db1113.7v9h2x7x.work/android/007dh_2.5.0/007dh_2.5.0_04263238.apk"
+        ]
+      },
+      "TG电报": {
+        "description": "Telegram 频道链接列表",
+        "type": "list",
+        "default": [
+          "https://t.me/bkyss233",
+          "https://t.me/shaoluo1112",
+          "https://t.me/SoShaoNv",
+          "https://t.me/fulj10"
+        ]
+      }
+    }
+  },
+  "recall": {
+    "description": "默认开启消息撤回",
+    "type": "bool",
+    "default": true
+  },
+  "recall_time": {
+    "description": "默认撤回时间（秒）",
+    "type": "int",
+    "default": 40,
+    "hint": "允许范围 10 - 120 秒。"
+  },
+  "r18_mode": {
+    "description": "R18 模式",
+    "type": "string",
+    "default": "all",
+    "options": ["all", "safe", "r18"],
+    "labels": ["0 全部", "1 非 R18", "2 R18"]
+  },
+  "image_preference": {
+    "description": "图片偏好",
+    "type": "string",
+    "default": "popular_d",
+    "options": ["popular_d", "popular_male_d", "popular_female_d"],
+    "labels": ["0 无偏好", "1 男性偏好", "2 女性偏好"]
+  },
+  "track_pixel": {
+    "description": "给下载的图片叠加噪点",
+    "type": "bool",
+    "default": true,
+    "hint": "对应原插件的 sharp-pixel 处理，用于规避部分图床/风控。"
+  },
+  "max_concurrent_download": {
+    "description": "图片下载并发数",
+    "type": "int",
+    "default": 5
+  },
+  "download_timeout": {
+    "description": "单张图片下载超时（秒）",
+    "type": "int",
+    "default": 20
+  },
+  "batch_size": {
+    "description": "合并转发每批图片数量",
+    "type": "int",
+    "default": 20
+  },
+  "max_pages_per_album": {
+    "description": "单个套图最多解析的页数",
+    "type": "int",
+    "default": 20
+  },
+  "random_interval": {
+    "description": "随机间隔（秒）",
+    "type": "int",
+    "default": 2,
+    "hint": "同一次请求内多张图片/多个作品之间的随机等待时间上限。"
+  },
+  "subscribe_check_interval": {
+    "description": "订阅推送检查间隔（小时）",
+    "type": "int",
+    "default": 4
+  },
+  "enable_scheduler": {
+    "description": "启用内置定时任务",
+    "type": "bool",
+    "default": true,
+    "hint": "启用后自动执行：订阅推送检查、套图列表增量更新、写真ID增量更新。"
+  },
+  "scheduler_mzt_cron": {
+    "description": "写真ID自动更新时间（HH:MM）",
+    "type": "string",
+    "default": "07:30"
+  },
+  "scheduler_mtb_cron": {
+    "description": "套图列表自动更新时间（HH:MM）",
+    "type": "string",
+    "default": "09:30"
+  },
+  "enable_id_whitelist": {
+    "description": "启用会话白名单",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后，仅允许下方列表中的群号/QQ号使用本插件。"
+  },
+  "id_whitelist": {
+    "description": "会话白名单",
+    "type": "list",
+    "default": []
+  },
+  "enable_group_limit": {
+    "description": "启用订阅数量限制",
+    "type": "bool",
+    "default": true,
+    "hint": "限制订阅画师的会话数量与单会话画师数量。"
+  },
+  "max_subscribe_sessions": {
+    "description": "最多允许订阅的会话数",
+    "type": "int",
+    "default": 5
+  },
+  "max_artists_per_session": {
+    "description": "单个会话最多订阅的画师数",
+    "type": "int",
+    "default": 20
+  },
+  "forward_as_node": {
+    "description": "使用合并转发（OneBot 节点）发送多图",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后，多图会以普通消息分批发送。部分平台不支持合并转发。"
+  }
+}
