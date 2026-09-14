@@ -10,14 +10,14 @@ import asyncio
 import random
 from typing import TYPE_CHECKING
 
-from .app_core.filecache import FileCache
-from .app_core.imaging import add_noise, save_bytes
-from .app_core.message import AdminMixin, MessageMixin
-from .app_core.paths import PluginPaths
-from .app_core.settings import PluginSettings
+from ..app_core.filecache import FileCache
+from ..app_core.imaging import add_noise, save_bytes
+from ..app_core.message import AdminMixin, MessageMixin
+from ..app_core.paths import PluginPaths
+from ..app_core.settings import PluginSettings
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .app_core.scheduler import TimeBasedScheduler
+    from ..app_core.scheduler import TimeBasedScheduler
 
 
 class spFeature(MessageMixin, AdminMixin):

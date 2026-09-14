@@ -10,7 +10,7 @@ import json as jsonlib
 import random
 from typing import Any
 
-import aiohttp
+import aiohttp # type: ignore[import]
 
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

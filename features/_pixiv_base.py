@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from astrbot.api.event import AstrMessageEvent
+from astrbot.api.event import AstrMessageEvent # type: ignore
 
-from .features._base import spFeature
-from .app_core.pixiv import PixivClient
+from ._base import spFeature
+from ..app_core.pixiv import PixivClient
 
 
 class PixivBase(spFeature):
@@ -22,9 +22,16 @@ class PixivBase(spFeature):
     # ------------------------------------------------------------------ #
     # 图片下载
     # ------------------------------------------------------------------ #
-    async def download_images(self, urls: list[str]) -> list[str]:
-        """并发下载图片并返回本地路径列表（失败项会被跳过）。"""
-        return await super().download_images(urls, prefix="pixiv")
+    async def download_images(
+    self,
+    urls: list[str],
+    *,
+    referer: str | None = None,
+    prefix: str = "pixiv",
+    ) -> list[str]:
+        return await super().download_images(
+        urls, referer=referer, prefix=prefix
+    )
 
     @staticmethod
     def work_text(body: dict) -> str:
@@ -69,7 +76,7 @@ class PixivBase(spFeature):
         works: list[tuple[str, list[str]]],
     ) -> list:
         """把 [(文本, 图片路径列表)] 组装成可 yield 的消息结果列表。"""
-        from astrbot.api.message_components import Node, Plain
+        from astrbot.api.message_components import Node, Plain # type: ignore
 
         results: list = []
         sender_name = event.get_sender_name() or "涩批"

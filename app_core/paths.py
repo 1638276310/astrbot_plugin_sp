@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 try:  # AstrBot >= 4.x
-    from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+    from astrbot.core.utils.astrbot_path import get_astrbot_data_path # type: ignore
     # from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 except Exception:  # pragma: no cover - 兼容极旧版本
     get_astrbot_plugin_data_path = None

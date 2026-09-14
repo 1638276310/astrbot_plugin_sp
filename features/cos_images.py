@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from .features._base import spFeature
-from .app_core.http import fetch_bytes
+from ._base import spFeature
+from ..app_core.http import fetch_bytes
 
 TRIGGER = r"^#?(2图|3图)$"
 IMAGE_COUNT = 10
@@ -38,7 +38,7 @@ class CosImageFeature(spFeature):
         separator = "&" if "?" in base else "?"
         url = f"{base}{separator}category={category}"
 
-        paths = await self._download(url, prefix=category)
+        paths = await self._download_cos_images(url, prefix=category)
         if not paths:
             yield event.plain_result("未能获取到图片，请稍后再试。")
             return
@@ -50,12 +50,12 @@ class CosImageFeature(spFeature):
         else:
             yield event.chain_result(self.image_chain(paths))
 
-    async def _download(self, url: str, prefix: str) -> list[str]:
+    async def _download_cos_images(self, url: str, prefix: str) -> list[str]:
         """从接口抓取若干张图片并保存到本地。"""
         import asyncio
         import random
 
-        from .app_core.imaging import add_noise, save_bytes
+        from ..app_core.imaging import add_noise, save_bytes
 
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * IMAGE_COUNT

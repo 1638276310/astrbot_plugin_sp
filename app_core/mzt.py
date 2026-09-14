@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import re
 
-from .app_core.browser import (
+from .browser import (
     BrowserError,
     browser_context,
     goto,
     query_first_text,
     random_delay,
 )
-from .app_core.settings import PluginSettings
+from .settings import PluginSettings
 
 MAX_IMAGES = 20
 ID_PATTERN = re.compile(r"/photo/(\d+)/?$")

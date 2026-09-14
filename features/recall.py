@@ -6,10 +6,11 @@ AstrBot 版直接写入插件配置（WebUI 可实时看到）。
 
 from __future__ import annotations
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
+from astrbot.api import logger  # type: ignore
 
-from .features._base import spFeature
-from .app_core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
+from ._base import spFeature
+from ..app_core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
 
 TOGGLE_TRIGGER = r"^#?(?:开启|关闭)(?:sp|涩批|色胚|色批|色皮)撤回$"
 TIME_TRIGGER = r"^#?设置(?:sp|涩批|色皮|色批)撤回(\d+)$"

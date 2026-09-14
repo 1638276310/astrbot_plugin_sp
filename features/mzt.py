@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import random
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from .features._base import spFeature
-from .app_core.mzt import collect_article_ids, fetch_album, parse_article_id
-from .app_core.storage import load_json, save_json
+from ._base import spFeature
+from ..app_core.mzt import collect_article_ids, fetch_album, parse_article_id
+from ..app_core.storage import load_json, save_json
 
 ID_LIST_TRIGGER = r"^#?更新写真(?:ID|id)$"
 RANDOM_TRIGGER = r"^#?随机写真$"
@@ -47,7 +47,7 @@ class MztFeature(spFeature):
         if not article_id:
             return
         yield event.plain_result("正在搜索，请稍等...")
-        async for result in self._send_album(event, article_id):
+        async for result in self._send_mzt_album(event, article_id):
             yield result
 
     # ------------------------------------------------------------------ #
@@ -65,7 +65,7 @@ class MztFeature(spFeature):
             return
         article_id = random.choice(ids)
         yield event.plain_result(f"写真ID：{article_id} 正在搜索，请稍等...")
-        async for result in self._send_album(event, article_id):
+        async for result in self._send_mzt_album(event, article_id):
             yield result
 
     # ------------------------------------------------------------------ #
@@ -101,7 +101,7 @@ class MztFeature(spFeature):
     # ------------------------------------------------------------------ #
     # 内部实现
     # ------------------------------------------------------------------ #
-    async def _send_album(self, event: AstrMessageEvent, article_id: str):
+    async def _send_mzt_album(self, event: AstrMessageEvent, article_id: str):
         """解析并发送一个写真页。"""
         try:
             album = await fetch_album(self.settings, article_id)
@@ -128,7 +128,7 @@ class MztFeature(spFeature):
             for batch in self.build_batches(nodes):
                 yield event.chain_result([self.wrap_nodes(batch)])
         else:
-            from astrbot.api.message_components import Plain
+            from astrbot.api.message_components import Plain # type: ignore
 
             chain = [Plain(text=album.header)] + self.image_chain(paths)
             yield event.chain_result(chain)

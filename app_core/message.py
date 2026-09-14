@@ -12,8 +12,8 @@ import re
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from astrbot.api.event import AstrMessageEvent
-from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
+from astrbot.api.event import AstrMessageEvent # type: ignore
+from astrbot.api.message_components import Image, Node, Nodes, Plain, Video # type: ignore
 
 from .paths import PluginPaths
 from .settings import PluginSettings

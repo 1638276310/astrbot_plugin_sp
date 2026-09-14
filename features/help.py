@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from .features._base import spFeature
+from ._base import spFeature
 
 TRIGGER = r"^#?(?:sp|涩批|色批|色胚|涩胚)(?:文字帮助|图片帮助)$"
 

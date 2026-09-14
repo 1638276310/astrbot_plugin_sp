@@ -17,8 +17,7 @@ from typing import Any
 from .http import USER_AGENTS
 
 try:  # Playwright 为可选依赖，缺失时给出明确提示
-    from playwright.async_api import Browser, BrowserContext, Page
-    from playwright.async_api import async_playwright
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright# type: ignore
 
     PLAYWRIGHT_AVAILABLE = True
     PLAYWRIGHT_IMPORT_ERROR = ""
@@ -64,7 +63,7 @@ async def browser_context(
 ):
     """启动浏览器并返回 (browser, context, page)。"""
     ensure_playwright()
-    playwright = await async_playwright().start()
+    playwright = await async_playwright().start() # type: ignore
     launch_kwargs: dict[str, Any] = {
         "headless": headless,
         "args": LAUNCH_ARGS,
@@ -94,7 +93,7 @@ async def browser_context(
 
 
 async def goto(
-    page: Page,
+    page: Page, # type: ignore
     url: str,
     *,
     timeout_ms: int = 60_000,
@@ -107,7 +106,7 @@ async def goto(
         raise BrowserError(f"打开页面失败 {url}: {exc}") from exc
 
 
-async def query_all_text(page: Page, selector: str) -> list[str]:
+async def query_all_text(page: Page, selector: str) -> list[str]: # type: ignore
     """取所有匹配元素的 innerText。"""
     try:
         elements = await page.query_selector_all(selector)
@@ -122,7 +121,7 @@ async def query_all_text(page: Page, selector: str) -> list[str]:
     return texts
 
 
-async def query_all_attr(page: Page, selector: str, attr: str) -> list[str]:
+async def query_all_attr(page: Page, selector: str, attr: str) -> list[str]: # type: ignore
     """取所有匹配元素的指定属性。"""
     try:
         elements = await page.query_selector_all(selector)
@@ -139,7 +138,7 @@ async def query_all_attr(page: Page, selector: str, attr: str) -> list[str]:
     return values
 
 
-async def query_first_text(page: Page, selector: str, default: str = "") -> str:
+async def query_first_text(page: Page, selector: str, default: str = "") -> str: # type: ignore
     """取第一个匹配元素的 innerText。"""
     try:
         element = await page.query_selector(selector)
@@ -151,7 +150,7 @@ async def query_first_text(page: Page, selector: str, default: str = "") -> str:
 
 
 async def query_first_attr(
-    page: Page, selector: str, attr: str, default: str = ""
+    page: Page, selector: str, attr: str, default: str = "" # type: ignore
 ) -> str:
     """取第一个匹配元素的属性。"""
     try:
@@ -164,14 +163,15 @@ async def query_first_attr(
         return default
 
 
-async def page_content(page: Page) -> str:
+async def page_content(page: Page) -> str: # type: ignore
+    """取页面 HTML 内容。"""
     try:
         return await page.content()
     except Exception:
         return ""
 
 
-async def page_title(page: Page) -> str:
+async def page_title(page: Page) -> str: # type: ignore
     try:
         return await page.title()
     except Exception:

@@ -8,9 +8,9 @@
 
 from __future__ import annotations
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from .features._base import spFeature
+from ._base import spFeature
 
 TRIGGER = r"^#?(?:写真网址|福利网址|吃瓜网址|导航网址|福利(?:App|APP|app)|TG电报)$"
 

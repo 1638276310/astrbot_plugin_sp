@@ -13,7 +13,7 @@ import io
 import random
 from pathlib import Path
 
-from PIL import Image as PILImage
+from PIL import Image as PILImage # type: ignore
 
 
 def to_base64(data: bytes) -> str:

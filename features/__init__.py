@@ -16,18 +16,18 @@
 * ``features/subscribe.py``   画师订阅与推送
 """
 
-from .features.cos_images import CosImageFeature
-from .features.help import HelpFeature
-from .features.magnet import MagnetFeature
-from .features.mtb import MtbFeature
-from .features.mzt import MztFeature
-from .features.pixiv_artist import PixivArtistFeature
-from .features.pixiv_pid import PixivPidFeature
-from .features.pixiv_tag import PixivTagFeature
-from .features.recall import RecallFeature
-from .features.sj import VideoFeature
-from .features.subscribe import SubscribeFeature
-from .features.urls import UrlFeature
+from .cos_images import CosImageFeature
+from .help import HelpFeature
+from .magnet import MagnetFeature
+from .mtb import MtbFeature
+from .mzt import MztFeature
+from .pixiv_artist import PixivArtistFeature
+from .pixiv_pid import PixivPidFeature
+from .pixiv_tag import PixivTagFeature
+from .recall import RecallFeature
+from .sj import VideoFeature
+from .subscribe import SubscribeFeature
+from .urls import UrlFeature
 
 __all__ = [
     "CosImageFeature",

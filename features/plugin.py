@@ -11,10 +11,10 @@
 
 from __future__ import annotations
 
-from astrbot.api import logger
-from astrbot.api.star import Context, Star, register
+from astrbot.api import logger # type: ignore
+from astrbot.api.star import Context, Star, register # type: ignore
 
-from features import (
+from . import (
     CosImageFeature,
     HelpFeature,
     MagnetFeature,
@@ -28,10 +28,10 @@ from features import (
     UrlFeature,
     VideoFeature,
 )
-from .app_core.paths import PLUGIN_NAME, PluginPaths
-from .app_core.scheduler import TimeBasedScheduler
-from .app_core.settings import PLUGIN_VERSION, build_settings
-from .app_core.storage import JsonStore
+from ..app_core.paths import PLUGIN_NAME, PluginPaths
+from ..app_core.scheduler import TimeBasedScheduler
+from ..app_core.settings import PLUGIN_VERSION, build_settings
+from ..app_core.storage import JsonStore
 
 
 @register(
@@ -62,7 +62,8 @@ class spPlugin(
     """
 
     def __init__(self, context: Context, config=None) -> None:
-        super().__init__(context)
+        # super().__init__(context)
+        Star.__init__(self, context)
         # 注入运行时依赖：配置 + 数据目录
         self.settings = build_settings(config)
         self.paths = PluginPaths(PLUGIN_NAME)
@@ -120,7 +121,7 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     async def _scheduled_mzt_update(self) -> None:
         """定时增量更新写真 ID 列表。"""
-        from .app_core.mzt import collect_article_ids
+        from ..app_core.mzt import collect_article_ids
 
         existing = set(self.mzt_ids())
         discovered = await collect_article_ids(self.settings, existing)
@@ -136,7 +137,7 @@ class spPlugin(
 
     async def _scheduled_mtb_update(self) -> None:
         """定时增量更新套图 URL 列表。"""
-        from .app_core.mtb import collect_album_urls
+        from ..app_core.mtb import collect_album_urls
 
         existing = self.album_urls()
         merged, total_pages = await collect_album_urls(

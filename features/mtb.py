@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import random
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from .features._base import spFeature
-from .app_core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
-from .app_core.storage import load_json, save_json
+from ._base import spFeature
+from ..app_core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
+from ..app_core.storage import load_json, save_json
 
 DETAIL_TRIGGER = r"^#?套图详情\s+(https?://\S+)$"
 RANDOM_TRIGGER = r"^#?随机美图吧$"
@@ -181,7 +181,7 @@ class MtbFeature(spFeature):
                     )
                 yield event.chain_result([self.wrap_nodes(batch)])
         else:
-            from astrbot.api.message_components import Plain
+            from astrbot.api.message_components import Plain # type: ignore
 
             yield event.chain_result(
                 [Plain(text="\n".join(detail.header_lines()))]

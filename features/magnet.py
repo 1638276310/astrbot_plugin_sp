@@ -8,12 +8,12 @@
 
 from __future__ import annotations
 
-from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message_components import Image, Plain
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
+from astrbot.api.message_components import Image, Plain # type: ignore
 
-from .features._base import spFeature
-from .app_core.magnetcat import describe_results, parse_command, search_magnet
-from .app_core.verify import fetch_magnet_info
+from ._base import spFeature
+from ..app_core.magnetcat import describe_results, parse_command, search_magnet
+from ..app_core.verify import fetch_magnet_info
 
 VERIFY_TRIGGER = r"^#验车(magnet:.+)$"
 # 与原 `^#?磁力猫(.*)$` 等价，但要求后面必须有非空关键词，
@@ -80,7 +80,7 @@ class MagnetFeature(spFeature):
             )
             if not data:
                 continue
-            from .app_core.imaging import add_noise, save_bytes
+            from ..app_core.imaging import add_noise, save_bytes
 
             if self.settings.track_pixel:
                 data = add_noise(data)
@@ -95,7 +95,7 @@ class MagnetFeature(spFeature):
             return
 
         if self.settings.forward_as_node:
-            from astrbot.api.message_components import Node
+            from astrbot.api.message_components import Node # type: ignore
 
             sender_name = event.get_sender_name() or "涩批"
             self_id = str(event.get_self_id() or "0")

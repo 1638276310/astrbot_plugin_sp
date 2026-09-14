@@ -16,11 +16,12 @@ import asyncio
 import random
 from typing import Any
 
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, filter # type: ignore
+from astrbot.api import logger  # 使用 astrbot 提供的 logger 接口 # type: ignore
 
-from .features._base import spFeature
-from .app_core.imaging import add_noise, save_bytes
-from .app_core.storage import JsonStore
+from ._base import spFeature
+from ..app_core.imaging import add_noise, save_bytes
+from ..app_core.storage import JsonStore
 
 SUBSCRIBE_TRIGGER = r"^#?订阅画师(\d+)$"
 UNSUBSCRIBE_TRIGGER = r"^#?取消订阅(\d+)$"
@@ -234,7 +235,7 @@ class SubscribeFeature(spFeature):
                     try:
                         await self._push_work(umo, artist_id, artist_name, work_id)
                     except Exception as exc:
-                        self.logger.warning(
+                        logger.warning(
                             f"[涩批] 推送作品 {work_id} 失败: {exc}"
                         )
                     await asyncio.sleep(PUSH_INTERVAL_SECONDS)
@@ -247,8 +248,8 @@ class SubscribeFeature(spFeature):
         work_id: str,
     ) -> None:
         """推送单个新作品到指定会话。"""
-        from astrbot.api.event import MessageChain
-        from astrbot.api.message_components import Image, Plain
+        from astrbot.api.event import MessageChain # type: ignore
+        from astrbot.api.message_components import Image, Plain # type: ignore
 
         details = await self.pixiv.fetch_illust(work_id)
         if not details or not details.get("body"):
@@ -258,7 +259,7 @@ class SubscribeFeature(spFeature):
         if not urls:
             return
 
-        paths = await self._download(urls)
+        paths = await self._download_push_images(urls)
         if not paths:
             return
 
@@ -284,7 +285,7 @@ class SubscribeFeature(spFeature):
     # ------------------------------------------------------------------ #
     # 工具
     # ------------------------------------------------------------------ #
-    async def _download(self, urls: list[str]) -> list[str]:
+    async def _download_push_images(self, urls: list[str]) -> list[str]:
         import random
 
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
@@ -332,7 +333,7 @@ class SubscribeFeature(spFeature):
 
     @property
     def pixiv(self):
-        from .app_core.pixiv import PixivClient
+        from ..app_core.pixiv import PixivClient
 
         client = getattr(self, "_subscribe_pixiv_client", None)
         if client is None:
