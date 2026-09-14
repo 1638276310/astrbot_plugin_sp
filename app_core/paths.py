@@ -5,6 +5,7 @@
 """
 
 from __future__ import annotations
+from astrbot.api.all import get_astrbot_plugin_data_path # type: ignore
 
 import os
 import shutil
@@ -12,8 +13,9 @@ import time
 from pathlib import Path
 
 try:  # AstrBot >= 4.x
-    from astrbot.core.utils.astrbot_path import get_astrbot_data_path # type: ignore
+    # from astrbot.core.utils.astrbot_path import get_astrbot_data_path # type: ignore
     # from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+    from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path # type: ignore
 except Exception:  # pragma: no cover - 兼容极旧版本
     get_astrbot_plugin_data_path = None
 
