@@ -1,5 +1,5 @@
 name: astrbot_plugin_sp
-display_name: 涩批
+display_name: 涩批插件 AstrBot 版
 short_desc: 涩批插件 AstrBot 版：P站图 / 磁力 / 妹子图 / 美图吧 / 网址导航 / 订阅推送
 desc: |
   涩批插件（原 TRSS-Yunzai 版 sp-plugin）的 AstrBot Python 重构版。
