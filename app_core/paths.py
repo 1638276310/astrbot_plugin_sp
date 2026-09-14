@@ -5,7 +5,7 @@
 """
 
 from __future__ import annotations
-from astrbot.api.all import get_astrbot_plugin_data_path # type: ignore
+# from astrbot.api.all import get_astrbot_plugin_data_path # type: ignore
 
 import os
 import shutil
