@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from core.http import HttpError, fetch_json
-from core.settings import PluginSettings
+from .app_core.http import HttpError, fetch_json
+from .app_core.settings import PluginSettings
 
 
 def parse_cookie_header(raw: str) -> dict[str, str]:

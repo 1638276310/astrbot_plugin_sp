@@ -13,9 +13,9 @@ import random
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.mzt import collect_article_ids, fetch_album, parse_article_id
-from core.storage import load_json, save_json
+from .features._base import spFeature
+from .app_core.mzt import collect_article_ids, fetch_album, parse_article_id
+from .app_core.storage import load_json, save_json
 
 ID_LIST_TRIGGER = r"^#?更新写真(?:ID|id)$"
 RANDOM_TRIGGER = r"^#?随机写真$"

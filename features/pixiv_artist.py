@@ -11,7 +11,7 @@ import re
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._pixiv_base import PixivBase
+from .features._pixiv_base import PixivBase
 
 TRIGGER = r"^#?随机(\d+)张(\d+)作品$"
 MAX_COUNT = 20

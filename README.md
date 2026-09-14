@@ -22,7 +22,7 @@
 ├── README.md
 ├── assets/
 │   └── 说明.txt                  # 放 help.jpg 即可使用 #涩批图片帮助
-├── core/                         # 公共能力（一个文件一件事）
+├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
 │   ├── settings.py               # 配置读取 + 上游接口与常量
 │   ├── storage.py                # JSON 持久化
@@ -37,7 +37,7 @@
 │   ├── magnetcat.py              # 磁力猫搜索
 │   ├── mzt.py                    # 妹子图解析
 │   └── mtb.py                    # 美图吧（ku1373）解析
-└── cmd/                          # 🎯 功能模块：一个功能一个文件
+└── features/                          # 🎯 功能模块：一个功能一个文件
     ├── _base.py                  # 各功能模块的基类
     ├── _pixiv_base.py            # P 站功能公共逻辑
     ├── plugin.py                 # 把下面这些功能拼成插件类
@@ -56,8 +56,8 @@
 ```
 
 **新增一个功能怎么做？**
-在 `cmd/` 下新建一个 `.py`，写一个继承 `spFeature` 的类，用 `@filter.regex(...)` 注册指令，
-然后把它加进 `cmd/__init__.py` 与 `cmd/plugin.py` 的继承列表即可，完全不用动其他文件。
+在 `features/` 下新建一个 `.py`，写一个继承 `spFeature` 的类，用 `@filter.regex(...)` 注册指令，
+然后把它加进 `features/__init__.py` 与 `features/plugin.py` 的继承列表即可，完全不用动其他文件。
 
 ---
 
@@ -114,7 +114,7 @@ playwright install chromium
 | `涩批文字帮助` / `sp文字帮助` | 发送文字版帮助 |
 | `涩批图片帮助` / `sp图片帮助` | 发送帮助图 |
 
-### 网址导航（`cmd/urls.py`）
+### 网址导航（`features/urls.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -124,7 +124,7 @@ playwright install chromium
 
 网址内容可在 WebUI 配置的 `url_groups` 中增删。
 
-### 妹子图（`cmd/mzt.py`）
+### 妹子图（`features/mzt.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -132,7 +132,7 @@ playwright install chromium
 | `随机写真` | 从已保存的 ID 里随机取一个 |
 | `更新写真ID` | 增量更新 ID 列表（**仅主人可用**） |
 
-### P 站（`cmd/pixiv_pid.py` / `pixiv_artist.py` / `pixiv_tag.py`）
+### P 站（`features/pixiv_pid.py` / `pixiv_artist.py` / `pixiv_tag.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -142,7 +142,7 @@ playwright install chromium
 
 `来X张XX图` 受 `#设置R18模式` 与 `#设置图片偏好` 影响。
 
-### 美图吧 / 套图（`cmd/mtb.py`）
+### 美图吧 / 套图（`features/mtb.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -151,7 +151,7 @@ playwright install chromium
 | `更新套图列表` | 增量采集最新 2 页（**仅主人可用**） |
 | `全量更新套图列表` | 从第 1 页采到最后一页（**仅主人可用**） |
 
-### 磁力（`cmd/magnet.py`）
+### 磁力（`features/magnet.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -162,7 +162,7 @@ playwright install chromium
 文件类型：`全部` `影视` `音乐` `图像` `文档` `压缩包` `安装包` `其他`
 排序方式：`相关度` `文件大小` `添加时间` `热度` `最近下载`
 
-### Cos 图 与 视频（`cmd/cos_images.py` / `cmd/sj.py`）
+### Cos 图 与 视频（`features/cos_images.py` / `features/sj.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -170,7 +170,7 @@ playwright install chromium
 | `3图` | 10 张三次元图 |
 | `骚鸡` / `烧鸡` / `sj` | 随机发送一个视频 |
 
-### 订阅与推送（`cmd/subscribe.py`）
+### 订阅与推送（`features/subscribe.py`）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -182,7 +182,7 @@ playwright install chromium
 
 > 群聊与私聊都支持订阅（原插件只支持群聊）。
 
-### 设置（`cmd/recall.py`，**仅主人可用**）
+### 设置（`features/recall.py`，**仅主人可用**）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -250,26 +250,26 @@ R18 模式、图片偏好、撤回设置等直接保存在插件配置中，WebU
 
 | 原 JS 文件 | AstrBot 版实现 |
 | --- | --- |
-| `apps/help.js` | `cmd/help.py` |
-| `apps/recall.js` | `cmd/recall.py` |
-| `apps/multiUrl.js` | `cmd/urls.py` |
-| `apps/sj.js` | `cmd/sj.py` |
-| `apps/pid.js` | `cmd/pixiv_pid.py` |
-| `apps/PixivArtistWorksFetcher.js` | `cmd/pixiv_artist.py` |
-| `apps/tag.js` | `cmd/pixiv_tag.py` |
-| `apps/mzt.js` | `cmd/mzt.py` + `core/mzt.py` |
-| `apps/mtb.js` | `cmd/mtb.py` + `core/mtb.py` |
-| `apps/MagnetLinkMao.js` | `cmd/magnet.py` + `core/magnetcat.py` |
-| `apps/MagnetLinkFetcher.js` | `cmd/magnet.py` + `core/verify.py` |
-| `apps/tu.js` | `cmd/cos_images.py` |
-| `apps/dingyue.js` | `cmd/subscribe.py` |
-| `apps/dingyue_Auto_update.js` | `cmd/subscribe.py` + `core/scheduler.py` |
+| `apps/help.js` | `features/help.py` |
+| `apps/recall.js` | `features/recall.py` |
+| `apps/multiUrl.js` | `features/urls.py` |
+| `apps/sj.js` | `features/sj.py` |
+| `apps/pid.js` | `features/pixiv_pid.py` |
+| `apps/PixivArtistWorksFetcher.js` | `features/pixiv_artist.py` |
+| `apps/tag.js` | `features/pixiv_tag.py` |
+| `apps/mzt.js` | `features/mzt.py` + `app_core/mzt.py` |
+| `apps/mtb.js` | `features/mtb.py` + `app_core/mtb.py` |
+| `apps/MagnetLinkMao.js` | `features/magnet.py` + `app_core/magnetcat.py` |
+| `apps/MagnetLinkFetcher.js` | `features/magnet.py` + `app_core/verify.py` |
+| `apps/tu.js` | `features/cos_images.py` |
+| `apps/dingyue.js` | `features/subscribe.py` |
+| `apps/dingyue_Auto_update.js` | `features/subscribe.py` + `app_core/scheduler.py` |
 | `apps/sp-update.js` | 由 AstrBot 插件管理负责（无需代码） |
-| `config/api.js` | `core/settings.py` + `core/pixiv.py` |
+| `config/api.js` | `app_core/settings.py` + `app_core/pixiv.py` |
 | `config/recall.yaml` | `_conf_schema.json` 中的 `recall` / `recall_time` / `r18_mode` / `image_preference` |
 | `config/dingyue.yaml` | `dingyue.json` |
-| `lib/sharp-pixel.js` | `core/imaging.py` 的 `add_noise()` |
-| `index.js` | `main.py` + `cmd/plugin.py` |
+| `lib/sharp-pixel.js` | `app_core/imaging.py` 的 `add_noise()` |
+| `index.js` | `main.py` + `features/plugin.py` |
 
 ### 有意做出的行为调整
 

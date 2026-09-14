@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from urllib.parse import quote
 
-from core.browser import BrowserError, browser_context, goto, query_all_text
-from core.settings import FILE_TYPE_MAP, ORDER_TYPE_MAP, PluginSettings
+from .app_core.browser import BrowserError, browser_context, goto, query_all_text
+from .app_core.settings import FILE_TYPE_MAP, ORDER_TYPE_MAP, PluginSettings
 
 
 class MagnetResult:

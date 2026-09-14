@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
+from .features._base import spFeature
+from .app_core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
 
 TOGGLE_TRIGGER = r"^#?(?:开启|关闭)(?:sp|涩批|色胚|色批|色皮)撤回$"
 TIME_TRIGGER = r"^#?设置(?:sp|涩批|色皮|色批)撤回(\d+)$"

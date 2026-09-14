@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 from urllib.parse import quote
 
-from core.browser import BrowserError, browser_context, goto
-from core.http import HttpError, fetch_text
-from core.settings import PluginSettings
+from .app_core.browser import BrowserError, browser_context, goto
+from .app_core.http import HttpError, fetch_text
+from .app_core.settings import PluginSettings
 
 API_HEADERS = {
     "Accept": "application/json, text/plain, */*",

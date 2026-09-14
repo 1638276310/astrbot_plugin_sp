@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._pixiv_base import PixivBase
+from .features._pixiv_base import PixivBase
 
 TRIGGER = r"^#?pid(\d+)$"
 

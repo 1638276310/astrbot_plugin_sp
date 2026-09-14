@@ -13,7 +13,7 @@ from pathlib import Path
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
+from .features._base import spFeature
 
 TRIGGER = r"^#?(?:sp|涩批|色批|色胚|涩胚)(?:文字帮助|图片帮助)$"
 

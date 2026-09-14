@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.http import fetch_bytes
+from .features._base import spFeature
+from .app_core.http import fetch_bytes
 
 TRIGGER = r"^#?(2图|3图)$"
 IMAGE_COUNT = 10
@@ -55,7 +55,7 @@ class CosImageFeature(spFeature):
         import asyncio
         import random
 
-        from core.imaging import add_noise, save_bytes
+        from .app_core.imaging import add_noise, save_bytes
 
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * IMAGE_COUNT

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from core.browser import (
+from .app_core.browser import (
     BrowserError,
     browser_context,
     goto,
@@ -21,7 +21,7 @@ from core.browser import (
     query_first_text,
     random_delay,
 )
-from core.settings import PluginSettings
+from .app_core.settings import PluginSettings
 
 DEFAULT_LIST_URL = "/b/1/"
 INCREMENTAL_MAX_PAGES = 2

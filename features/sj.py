@@ -11,8 +11,8 @@ import random
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.http import fetch_bytes
+from .features._base import spFeature
+from .app_core.http import fetch_bytes
 
 TRIGGER = r"^#?(?:骚鸡|烧鸡|sj)$"
 

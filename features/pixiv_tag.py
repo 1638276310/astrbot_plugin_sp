@@ -11,7 +11,7 @@ import re
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._pixiv_base import PixivBase
+from .features._pixiv_base import PixivBase
 
 TRIGGER = r"^#?来(\d+)张(.*?)图$"
 MAX_COUNT = 60

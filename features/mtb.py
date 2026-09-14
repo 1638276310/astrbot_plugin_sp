@@ -14,9 +14,9 @@ import random
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
-from core.storage import load_json, save_json
+from .features._base import spFeature
+from .app_core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
+from .app_core.storage import load_json, save_json
 
 DETAIL_TRIGGER = r"^#?套图详情\s+(https?://\S+)$"
 RANDOM_TRIGGER = r"^#?随机美图吧$"

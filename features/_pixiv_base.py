@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent
 
-from cmd._base import spFeature
-from core.pixiv import PixivClient
+from .features._base import spFeature
+from .app_core.pixiv import PixivClient
 
 
 class PixivBase(spFeature):

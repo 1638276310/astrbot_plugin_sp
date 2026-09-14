@@ -2,11 +2,11 @@
 
 本文件只做三件事：
 
-1. 定义插件类（把 cmd/ 下的各个功能 Mixin 与 ``Star`` 组合起来）
+1. 定义插件类（把 features/ 下的各个功能 Mixin 与 ``Star`` 组合起来）
 2. 注入运行时的配置与数据目录
 3. 启动/停止内置定时任务（订阅推送、写真ID更新、套图列表更新）
 
-所有具体的指令实现都在 ``cmd/`` 目录下各自的文件里。
+所有具体的指令实现都在 ``features/`` 目录下各自的文件里。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 from astrbot.api import logger
 from astrbot.api.star import Context, Star, register
 
-from cmd import (
+from features import (
     CosImageFeature,
     HelpFeature,
     MagnetFeature,
@@ -28,10 +28,10 @@ from cmd import (
     UrlFeature,
     VideoFeature,
 )
-from core.paths import PLUGIN_NAME, PluginPaths
-from core.scheduler import TimeBasedScheduler
-from core.settings import PLUGIN_VERSION, build_settings
-from core.storage import JsonStore
+from .app_core.paths import PLUGIN_NAME, PluginPaths
+from .app_core.scheduler import TimeBasedScheduler
+from .app_core.settings import PLUGIN_VERSION, build_settings
+from .app_core.storage import JsonStore
 
 
 @register(
@@ -120,7 +120,7 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     async def _scheduled_mzt_update(self) -> None:
         """定时增量更新写真 ID 列表。"""
-        from core.mzt import collect_article_ids
+        from .app_core.mzt import collect_article_ids
 
         existing = set(self.mzt_ids())
         discovered = await collect_article_ids(self.settings, existing)
@@ -136,7 +136,7 @@ class spPlugin(
 
     async def _scheduled_mtb_update(self) -> None:
         """定时增量更新套图 URL 列表。"""
-        from core.mtb import collect_album_urls
+        from .app_core.mtb import collect_album_urls
 
         existing = self.album_urls()
         merged, total_pages = await collect_album_urls(

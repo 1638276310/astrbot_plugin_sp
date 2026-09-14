@@ -18,9 +18,9 @@ from typing import Any
 
 from astrbot.api.event import AstrMessageEvent, filter
 
-from cmd._base import spFeature
-from core.imaging import add_noise, save_bytes
-from core.storage import JsonStore
+from .features._base import spFeature
+from .app_core.imaging import add_noise, save_bytes
+from .app_core.storage import JsonStore
 
 SUBSCRIBE_TRIGGER = r"^#?订阅画师(\d+)$"
 UNSUBSCRIBE_TRIGGER = r"^#?取消订阅(\d+)$"
@@ -332,7 +332,7 @@ class SubscribeFeature(spFeature):
 
     @property
     def pixiv(self):
-        from core.pixiv import PixivClient
+        from .app_core.pixiv import PixivClient
 
         client = getattr(self, "_subscribe_pixiv_client", None)
         if client is None:
