@@ -25,28 +25,8 @@ class CosImageFeature(spFeature):
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
-
-        command = "2图"
-        category = CATEGORY_MAP[command]
-        type_name = TYPE_NAME[command]
-
-        yield event.plain_result(f"正在获取{type_name}，请稍等...")
-
-        base = self.settings.cos_api
-        separator = "&" if "?" in base else "?"
-        url = f"{base}{separator}category={category}"
-
-        paths = await self._download_cos_images(url, prefix=category)
-        if not paths:
-            yield event.plain_result("未能获取到图片，请稍后再试。")
-            return
-
-        if self.settings.forward_as_node:
-            nodes = self.image_nodes(event, paths)
-            for batch in self.build_batches(nodes):
-                yield event.chain_result([self.wrap_nodes(batch)])
-        else:
-            yield event.chain_result(self.image_chain(paths))
+        async for result in self._send_cos(event, "2图"):
+            yield result
 
     @filter.command("3图", priority=60)
     async def sp_cos_images_3d(self, event: AstrMessageEvent):
@@ -54,8 +34,11 @@ class CosImageFeature(spFeature):
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
+        async for result in self._send_cos(event, "3图"):
+            yield result
 
-        command = "3图"
+    async def _send_cos(self, event: AstrMessageEvent, command: str):
+        """按 2图/3图 发送对应类别图包。"""
         category = CATEGORY_MAP[command]
         type_name = TYPE_NAME[command]
 

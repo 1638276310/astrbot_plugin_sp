@@ -77,7 +77,8 @@ class RecallFeature(spFeature):
             return
 
         # 优先用空格传参（/设置sp撤回 60），否则连写解析（/设置sp撤回60）
-        if seconds > 0:
+        # 0 为合法入参（表示关闭撤回），不能用 "if not seconds" 判空
+        if isinstance(seconds, int) and seconds >= 0:
             raw = str(seconds)
         else:
             m = RECALL_TIME_PATTERN.search(event.get_message_str())
