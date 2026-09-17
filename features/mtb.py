@@ -3,13 +3,14 @@
 对应原 ``mtb.js``：
 
 * ``/随机美图吧``        —— 从已保存列表随机抽一套
-* ``/套图详情 <URL>``    —— 解析指定套图
+* ``/套图详情 <URL>``    —— 解析指定套图（URL 用空格分隔）
 * ``/更新套图列表``      —— 增量采集（列表为空时自动转全量，仅主人可用）
 * ``/全量更新套图列表``  —— 全量采集（仅主人可用）
 """
 
 from __future__ import annotations
 
+import re
 import random
 
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
@@ -18,10 +19,8 @@ from ._base import spFeature
 from ..app_core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
 from ..app_core.storage import load_json, save_json
 
-DETAIL_TRIGGER = r"^/套图详情\s+(https?://\S+)$"
-RANDOM_TRIGGER = r"^/随机美图吧$"
-FULL_UPDATE_TRIGGER = r"^/全量更新套图列表$"
-INCREMENTAL_UPDATE_TRIGGER = r"^/更新套图列表$"
+# 内部解析正则：兼容 /套图详情 <URL> 空格格式
+DETAIL_URL_PATTERN = re.compile(r"套图详情\s+(https?://\S+)")
 
 
 class MtbFeature(spFeature):
@@ -39,7 +38,7 @@ class MtbFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /随机美图吧
     # ------------------------------------------------------------------ #
-    @filter.regex(RANDOM_TRIGGER, priority=25)
+    @filter.command("随机美图吧", priority=25)
     async def sp_mtb_random(self, event: AstrMessageEvent):
         """随机解析一套美图吧套图（/随机美图吧）"""
         if not await self.guard(event):
@@ -57,23 +56,31 @@ class MtbFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /套图详情 <URL>
     # ------------------------------------------------------------------ #
-    @filter.regex(DETAIL_TRIGGER, priority=25)
-    async def sp_mtb_detail(self, event: AstrMessageEvent):
+    @filter.command("套图详情", priority=25)
+    async def sp_mtb_detail(self, event: AstrMessageEvent, url: str = ""):
         """解析指定美图吧套图链接（/套图详情 <URL>）"""
         if not await self.guard(event):
             return
 
-        url = parse_detail_url(event.get_message_str())
+        # 优先用空格传参（/套图详情 https://...），否则连写解析
         if not url:
+            m = DETAIL_URL_PATTERN.search(event.get_message_str())
+            url = m.group(1) if m else ""
+        if not url.startswith("http"):
+            yield event.plain_result("用法：/套图详情 <URL>")
+            return
+        parsed = parse_detail_url(url)
+        if not parsed:
+            yield event.plain_result("URL 格式不正确")
             return
         yield event.plain_result("正在解析套图，请稍等...")
-        async for result in self._send_album(event, url):
+        async for result in self._send_album(event, parsed):
             yield result
 
     # ------------------------------------------------------------------ #
     # /更新套图列表
     # ------------------------------------------------------------------ #
-    @filter.regex(INCREMENTAL_UPDATE_TRIGGER, priority=25)
+    @filter.command("更新套图列表", priority=25)
     async def sp_mtb_incremental_update(self, event: AstrMessageEvent):
         """增量更新套图列表（仅主人可用）"""
         if not await self.guard(event):
@@ -111,7 +118,7 @@ class MtbFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /全量更新套图列表
     # ------------------------------------------------------------------ #
-    @filter.regex(FULL_UPDATE_TRIGGER, priority=25)
+    @filter.command("全量更新套图列表", priority=25)
     async def sp_mtb_full_update(self, event: AstrMessageEvent):
         """全量更新套图列表（仅主人可用）"""
         if not await self.guard(event):

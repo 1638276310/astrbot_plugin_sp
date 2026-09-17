@@ -11,7 +11,6 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from ._base import spFeature
 from ..app_core.http import fetch_bytes
 
-TRIGGER = r"^/(2图|3图)$"
 IMAGE_COUNT = 10
 CATEGORY_MAP = {"2图": "acg", "3图": "reality"}
 TYPE_NAME = {"2图": "二次元图片", "3图": "现实图片"}
@@ -20,7 +19,7 @@ TYPE_NAME = {"2图": "二次元图片", "3图": "现实图片"}
 class CosImageFeature(spFeature):
     """2图 / 3图指令。"""
 
-    @filter.regex(TRIGGER, priority=60)
+    @filter.command("2图", alias={"3图"}, priority=60)
     async def sp_cos_images(self, event: AstrMessageEvent):
         """获取二次元/现实图包（/2图 或 /3图）"""
         if not await self.guard(event):

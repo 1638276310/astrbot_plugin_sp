@@ -13,21 +13,22 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._pixiv_base import PixivBase
 
-TRIGGER = r"^/随机(\d+)张(\d+)作品$"
+ARTIST_PATTERN = re.compile(r"随机\s*(\d+)\s*张\s*(\d+)\s*作品")
 MAX_COUNT = 20
 
 
 class PixivArtistFeature(PixivBase):
     """画师作品随机抽取指令。"""
 
-    @filter.regex(TRIGGER, priority=20)
+    @filter.command("随机", priority=20)
     async def sp_pixiv_random_artist(self, event: AstrMessageEvent):
-        """随机获取画师作品（/随机X张Y作品，X ≤ 20）"""
+        """随机获取画师作品（/随机 X 张 Y 作品，X ≤ 20）"""
         if not await self.guard(event):
             return
 
-        parsed = re.match(TRIGGER, event.get_message_str().strip())
+        parsed = ARTIST_PATTERN.search(event.get_message_str().strip())
         if not parsed:
+            yield event.plain_result("用法：/随机 X 张 Y 作品，例如 /随机 3 张 123456 作品")
             return
         count = int(parsed.group(1))
         artist_id = parsed.group(2)

@@ -12,13 +12,15 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._base import spFeature
 
-TRIGGER = r"^/(?:写真网址|福利网址|吃瓜网址|导航网址|福利(?:App|APP|app)|TG电报)$"
-
 
 class UrlFeature(spFeature):
     """网址导航指令。"""
 
-    @filter.regex(TRIGGER, priority=30)
+    @filter.command(
+        "写真网址",
+        alias={"福利网址", "吃瓜网址", "导航网址", "福利App", "福利APP", "福利app", "TG电报"},
+        priority=30,
+    )
     async def sp_send_urls(self, event: AstrMessageEvent):
         """获取各类网站地址（写真/福利/吃瓜/导航/福利App/TG电报）"""
         if not await self.guard(event):

@@ -28,7 +28,7 @@ INCREMENTAL_MAX_PAGES = 2
 COLLECT_RETRY = 3
 PAGE_INFO_SELECTOR = "div.list div.w1200 div.page span.pageinfo"
 ERROR_PAGE_PATTERN = re.compile(r"共\s*(\d+)\s*页")
-DETAIL_URL_PATTERN = re.compile(r"^/?套图详情\s+(https?://\S+)$")
+DETAIL_URL_PATTERN = re.compile(r"套图详情\s+(https?://\S+)")
 
 
 class AlbumDetail:
@@ -57,7 +57,7 @@ class AlbumDetail:
 
 
 def parse_detail_url(text: str) -> str | None:
-    match = DETAIL_URL_PATTERN.match((text or "").strip())
+    match = DETAIL_URL_PATTERN.search((text or "").strip())
     return match.group(1) if match else None
 
 

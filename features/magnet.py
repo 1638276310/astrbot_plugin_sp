@@ -2,11 +2,14 @@
 
 对应原 ``MagnetLinkFetcher.js``（验车）与 ``MagnetLinkMao.js``（磁力猫搜索）。
 
-* ``/验车<magnet:...>``                       —— 查询磁力链接详情并发送截图
+* ``/验车 magnet:...``                       —— 查询磁力链接详情并发送截图
 * ``/磁力猫 <关键词> [类型] [排序] [数量]``    —— 磁力猫搜索
 """
 
 from __future__ import annotations
+
+import asyncio
+import re
 
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from astrbot.api.message_components import Image, Plain # type: ignore
@@ -15,11 +18,7 @@ from ._base import spFeature
 from ..app_core.magnetcat import describe_results, parse_command, search_magnet
 from ..app_core.verify import fetch_magnet_info
 
-VERIFY_TRIGGER = r"^/验车(magnet:.+)$"
-# 与原 `^/磁力猫(.*)$` 等价，但要求后面必须有非空关键词，
-# 避免抢占其他插件的消息。
-MAGNETCAT_TRIGGER = r"^/磁力猫\s*\S+"
-
+MAGNET_LINK_PATTERN = re.compile(r"验车\s*(magnet:\S+)")
 VERIFY_RETRY = 3
 VERIFY_RETRY_DELAY = 2.0
 MAX_SCREENSHOTS = 9
@@ -31,19 +30,22 @@ class MagnetFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /验车
     # ------------------------------------------------------------------ #
-    @filter.regex(VERIFY_TRIGGER, priority=20)
-    async def sp_verify_magnet(self, event: AstrMessageEvent):
-        """查询磁力链接详情（/验车<magnet:...>）"""
+    @filter.command("验车", priority=20)
+    async def sp_verify_magnet(self, event: AstrMessageEvent, magnet: str = ""):
+        """查询磁力链接详情（/验车 magnet:...）"""
         if not await self.guard(event):
             return
 
-        import asyncio
-        import re
-
-        match = re.match(VERIFY_TRIGGER, event.get_message_str().strip())
-        if not match:
+        # 优先用空格传参（/验车 magnet:...），否则连写解析（/验车magnet:...）
+        if not magnet:
+            m = MAGNET_LINK_PATTERN.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/验车 <magnet:...>")
+                return
+            magnet = m.group(1)
+        if not magnet.startswith("magnet:"):
+            yield event.plain_result("用法：/验车 <magnet:...>")
             return
-        magnet = match.group(1)
 
         yield event.plain_result("正在验车，请稍等...")
 
@@ -123,16 +125,28 @@ class MagnetFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /磁力猫
     # ------------------------------------------------------------------ #
-    @filter.regex(MAGNETCAT_TRIGGER, priority=20)
-    async def sp_magnet_cat(self, event: AstrMessageEvent):
+    @filter.command("磁力猫", priority=20)
+    async def sp_magnet_cat(self, event: AstrMessageEvent, keyword: str = "", file_type: str = "", order: str = "", count: int = 10):
         """磁力猫搜索（/磁力猫 关键词 [类型] [排序] [数量]）"""
         if not await self.guard(event):
             return
 
-        parsed = parse_command(event.get_message_str())
-        if not parsed:
-            return
-        keyword, file_type, order, count = parsed
+        # 优先用空格传参，否则回退到连写解析
+        if not keyword:
+            parsed = parse_command(event.get_message_str())
+            if not parsed:
+                yield event.plain_result("用法：/磁力猫 <关键词> [类型] [排序] [数量]")
+                return
+            keyword, file_type, order, count = parsed
+        else:
+            # 空格传参：AstrBot 自动解析，但 count 可能仍是字符串
+            try:
+                count = int(count) if str(count).isdigit() else 10
+            except (ValueError, TypeError):
+                count = 10
+            file_type = str(file_type or "")
+            order = str(order or "")
+
         if count <= 0:
             count = 10
         count = min(count, 50)

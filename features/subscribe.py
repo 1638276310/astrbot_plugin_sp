@@ -2,7 +2,7 @@
 
 对应原 ``dingyue.js`` + ``dingyue_Auto_update.js``：
 
-* ``/订阅画师<ID>`` / ``/取消订阅<ID>`` / ``/订阅列表``
+* ``/订阅画师 <ID>`` / ``/取消订阅 <ID>`` / ``/订阅列表``
 * ``/sp推送`` / ``/关闭sp推送``
 * 定时检查更新并推送到开启了推送的会话
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 from typing import Any
 
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
@@ -23,11 +24,8 @@ from ._base import spFeature
 from ..app_core.imaging import add_noise, save_bytes
 from ..app_core.storage import JsonStore
 
-SUBSCRIBE_TRIGGER = r"^/订阅画师(\d+)$"
-UNSUBSCRIBE_TRIGGER = r"^/取消订阅(\d+)$"
-LIST_TRIGGER = r"^/订阅列表$"
-ENABLE_TRIGGER = r"^/sp推送$"
-DISABLE_TRIGGER = r"^/关闭sp推送$"
+SUBSCRIBE_PAT = re.compile(r"订阅画师\s*(\d+)")
+UNSUBSCRIBE_PAT = re.compile(r"取消订阅\s*(\d+)")
 
 PUSH_MAX_WORKS = 3
 PUSH_INTERVAL_SECONDS = 10
@@ -58,17 +56,21 @@ class SubscribeFeature(spFeature):
         self.store().set(data, persist=True)
 
     # ------------------------------------------------------------------ #
-    # /订阅画师<ID>
+    # /订阅画师 <ID>
     # ------------------------------------------------------------------ #
-    @filter.regex(SUBSCRIBE_TRIGGER, priority=20)
-    async def sp_subscribe(self, event: AstrMessageEvent):
-        """订阅画师更新（/订阅画师<ID>）"""
+    @filter.command("订阅画师", priority=20)
+    async def sp_subscribe(self, event: AstrMessageEvent, artist_id: str = ""):
+        """订阅画师更新（/订阅画师 <ID>）"""
         if not await self.guard(event):
             return
 
-        artist_id = self.extract_number(event.get_message_str(), SUBSCRIBE_TRIGGER)
+        # 优先用空格传参（/订阅画师 12345），否则连写解析（/订阅画师12345）
         if not artist_id:
-            return
+            m = SUBSCRIBE_PAT.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/订阅画师 <画师ID>")
+                return
+            artist_id = m.group(1)
 
         session = self.session_key(event)
         data = self.load_data()
@@ -116,17 +118,21 @@ class SubscribeFeature(spFeature):
         yield event.plain_result(f"成功订阅画师{artist_id}（{artist_name}）")
 
     # ------------------------------------------------------------------ #
-    # /取消订阅<ID>
+    # /取消订阅 <ID>
     # ------------------------------------------------------------------ #
-    @filter.regex(UNSUBSCRIBE_TRIGGER, priority=20)
-    async def sp_unsubscribe(self, event: AstrMessageEvent):
-        """取消订阅画师（/取消订阅<ID>）"""
+    @filter.command("取消订阅", priority=20)
+    async def sp_unsubscribe(self, event: AstrMessageEvent, artist_id: str = ""):
+        """取消订阅画师（/取消订阅 <ID>）"""
         if not await self.guard(event):
             return
 
-        artist_id = self.extract_number(event.get_message_str(), UNSUBSCRIBE_TRIGGER)
+        # 优先用空格传参（/取消订阅 12345），否则连写解析（/取消订阅12345）
         if not artist_id:
-            return
+            m = UNSUBSCRIBE_PAT.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/取消订阅 <画师ID>")
+                return
+            artist_id = m.group(1)
         session = self.session_key(event)
         data = self.load_data()
         entry = data.get(session)
@@ -140,7 +146,7 @@ class SubscribeFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /订阅列表
     # ------------------------------------------------------------------ #
-    @filter.regex(LIST_TRIGGER, priority=20)
+    @filter.command("订阅列表", priority=20)
     async def sp_subscribe_list(self, event: AstrMessageEvent):
         """查看本会话已订阅的画师（/订阅列表）"""
         if not await self.guard(event):
@@ -162,7 +168,7 @@ class SubscribeFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /sp推送 / /关闭sp推送
     # ------------------------------------------------------------------ #
-    @filter.regex(ENABLE_TRIGGER, priority=20)
+    @filter.command("sp推送", priority=20)
     async def sp_enable_push(self, event: AstrMessageEvent):
         """开启画师更新推送（/sp推送）"""
         if not await self.guard(event):
@@ -179,7 +185,7 @@ class SubscribeFeature(spFeature):
         self.save_data(data)
         yield event.plain_result("已开启sp推送。")
 
-    @filter.regex(DISABLE_TRIGGER, priority=20)
+    @filter.command("关闭sp推送", priority=20)
     async def sp_disable_push(self, event: AstrMessageEvent):
         """关闭画师更新推送（/关闭sp推送）"""
         if not await self.guard(event):

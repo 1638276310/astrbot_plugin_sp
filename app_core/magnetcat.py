@@ -48,11 +48,12 @@ class MagnetResult:
 def parse_command(text: str) -> tuple[str, str, str, int] | None:
     """解析 ``/磁力猫 关键词 [类型] [排序] [数量]``。
 
+    兼容带 ``/`` 前缀（被 AstrBot 唤醒前缀机制去掉前）和不带前缀两种情况。
     返回 (关键词, 文件类型, 排序, 数量) 或 None。
     """
     match = re.match(
-        r"^/?磁力猫\s*(\S+)(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\d+))?$",
-        (text or "").strip(),
+        r"磁力猫\s*(\S+)(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\d+))?$",
+        (text or "").strip().lstrip("/"),
     )
     if not match:
         return None

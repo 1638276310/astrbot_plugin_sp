@@ -15,8 +15,6 @@ from ._base import spFeature
 from ..app_core.http import fetch_bytes
 from ..app_core.storage import load_json, save_json
 
-TRIGGER = r"^/(?:骚鸡|烧鸡|sj)$"
-
 REFERER = "https://www.kuaishou.com/"
 
 
@@ -48,7 +46,7 @@ class VideoFeature(spFeature):
         """保存视频列表到持久化目录。"""
         return save_json(self.paths.video_urls_file, urls)
 
-    @filter.regex(TRIGGER, priority=20)
+    @filter.command("骚鸡", alias={"烧鸡", "sj"}, priority=20)
     async def sp_random_video(self, event: AstrMessageEvent):
         """随机发送一个涩批视频"""
         if not await self.guard(event):

@@ -2,7 +2,7 @@
 
 对应原 ``mzt.js``：
 
-* ``/写真馆<ID>``  —— 获取指定写真
+* ``/写真馆 <ID>``  —— 获取指定写真（建议空格分隔，连写也兼容）
 * ``/随机写真``    —— 随机取一个已保存的 ID
 * ``/更新写真ID``  —— 增量更新 ID 列表（仅主人可用）
 """
@@ -16,9 +16,6 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from ._base import spFeature
 from ..app_core.mzt import collect_article_ids, fetch_album, parse_article_id
 from ..app_core.storage import load_json, save_json
-
-ID_LIST_TRIGGER = r"^/更新写真(?:ID|id)$"
-RANDOM_TRIGGER = r"^/随机写真$"
 
 
 class MztFeature(spFeature):
@@ -37,14 +34,15 @@ class MztFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /写真馆<ID>
     # ------------------------------------------------------------------ #
-    @filter.regex(r"^/写真馆(\d+)$", priority=20)
+    @filter.command("写真馆", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
-        """获取妹子图写真（/写真馆<ID>）"""
+        """获取妹子图写真（/写真馆 <ID>）"""
         if not await self.guard(event):
             return
 
         article_id = parse_article_id(event.get_message_str())
         if not article_id:
+            yield event.plain_result("用法：/写真馆 <ID>，例如 /写真馆 12345")
             return
         yield event.plain_result("正在搜索，请稍等...")
         async for result in self._send_mzt_album(event, article_id):
@@ -53,7 +51,7 @@ class MztFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /随机写真
     # ------------------------------------------------------------------ #
-    @filter.regex(RANDOM_TRIGGER, priority=20)
+    @filter.command("随机写真", priority=20)
     async def sp_mzt_random(self, event: AstrMessageEvent):
         """随机获取妹子图（/随机写真）"""
         if not await self.guard(event):
@@ -71,7 +69,7 @@ class MztFeature(spFeature):
     # ------------------------------------------------------------------ #
     # /更新写真ID
     # ------------------------------------------------------------------ #
-    @filter.regex(ID_LIST_TRIGGER, priority=20)
+    @filter.command("更新写真ID", alias={"更新写真id"}, priority=20)
     async def sp_mzt_update_ids(self, event: AstrMessageEvent):
         """增量更新写真ID列表（仅主人可用）"""
         if not await self.guard(event):

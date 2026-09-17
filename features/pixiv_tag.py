@@ -13,7 +13,7 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._pixiv_base import PixivBase
 
-TRIGGER = r"^/来(\d+)张(.*?)图$"
+TAG_PATTERN = re.compile(r"来\s*(\d+)\s*张\s*(.*?)\s*图")
 MAX_COUNT = 60
 MAX_IMAGES_PER_PID = 5
 GROUP_SIZE = 10
@@ -22,14 +22,15 @@ GROUP_SIZE = 10
 class PixivTagFeature(PixivBase):
     """标签搜索指令。"""
 
-    @filter.regex(TRIGGER, priority=20)
+    @filter.command("来", priority=20)
     async def sp_pixiv_tag(self, event: AstrMessageEvent):
-        """按标签搜索 P 站图片（/来X张XX图，X ≤ 60）"""
+        """按标签搜索 P 站图片（/来 X 张 XX图，X ≤ 60）"""
         if not await self.guard(event):
             return
 
-        parsed = re.match(TRIGGER, event.get_message_str().strip())
+        parsed = TAG_PATTERN.search(event.get_message_str().strip())
         if not parsed:
+            yield event.plain_result("用法：/来 X 张 XX图，例如 /来 10 张 白丝图")
             return
         count = int(parsed.group(1))
         tag = (parsed.group(2) or "").strip()

@@ -6,22 +6,41 @@ AstrBot 版直接写入插件配置（WebUI 可实时看到）。
 
 from __future__ import annotations
 
+import re
+
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from astrbot.api import logger  # type: ignore
 
 from ._base import spFeature
 from ..app_core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
 
-TOGGLE_TRIGGER = r"^/(?:开启|关闭)(?:sp|涩批|色胚|色批|色皮)撤回$"
-TIME_TRIGGER = r"^/设置(?:sp|涩批|色皮|色批)撤回(\d+)$"
-R18_TRIGGER = r"^/设置R18模式(0|1|2)$"
-PREFERENCE_TRIGGER = r"^/设置图片偏好(0|1|2)$"
+# 内部解析正则（兼容 / 前缀 + 连写数字）
+RECALL_TIME_PATTERN = re.compile(r"设置(?:sp|涩批|色皮|色批)撤回(\d+)")
+R18_PATTERN = re.compile(r"设置R18模式(0|1|2)")
+PREFERENCE_PATTERN = re.compile(r"设置图片偏好(0|1|2)")
 
 
 class RecallFeature(spFeature):
     """设置类指令。"""
 
-    @filter.regex(TOGGLE_TRIGGER, priority=40)
+    # ------------------------------------------------------------------ #
+    # /开启sp撤回 / /关闭sp撤回
+    # ------------------------------------------------------------------ #
+    @filter.command(
+        "开启sp撤回",
+        alias={
+            "关闭sp撤回",
+            "开启涩批撤回",
+            "关闭涩批撤回",
+            "开启色胚撤回",
+            "关闭色胚撤回",
+            "开启色批撤回",
+            "关闭色批撤回",
+            "开启色皮撤回",
+            "关闭色皮撤回",
+        },
+        priority=40,
+    )
     async def sp_toggle_recall(self, event: AstrMessageEvent):
         """开启/关闭涩批消息撤回（/开启sp撤回 / /关闭sp撤回）"""
         if not await self.guard(event):
@@ -39,17 +58,31 @@ class RecallFeature(spFeature):
         else:
             yield event.plain_result("已关闭撤回功能")
 
-    @filter.regex(TIME_TRIGGER, priority=40)
-    async def sp_set_recall_time(self, event: AstrMessageEvent):
+    # ------------------------------------------------------------------ #
+    # /设置sp撤回X
+    # ------------------------------------------------------------------ #
+    @filter.command(
+        "设置sp撤回",
+        alias={"设置涩批撤回", "设置色皮撤回", "设置色批撤回"},
+        priority=40,
+    )
+    async def sp_set_recall_time(self, event: AstrMessageEvent, seconds: int = 0):
         """设置涩批消息撤回时间（10-120 秒）"""
         if not await self.guard(event):
             return
 
         if not await self.require_admin(event):
             return
-        raw = self.extract_number(event.get_message_str(), TIME_TRIGGER)
-        if raw is None:
-            return
+
+        # 优先用空格传参（/设置sp撤回 60），否则连写解析（/设置sp撤回60）
+        if seconds > 0:
+            raw = str(seconds)
+        else:
+            m = RECALL_TIME_PATTERN.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/设置sp撤回 60（10-120 秒）")
+                return
+            raw = m.group(1)
         seconds = int(raw)
         if seconds < 10 or seconds > 120:
             yield event.plain_result("建议设置为10-120秒哦")
@@ -57,17 +90,30 @@ class RecallFeature(spFeature):
         self.settings.recall_time = seconds
         yield event.plain_result(f"已设置撤回时间为{seconds}秒")
 
-    @filter.regex(R18_TRIGGER, priority=40)
-    async def sp_set_r18_mode(self, event: AstrMessageEvent):
+    # ------------------------------------------------------------------ #
+    # /设置R18模式X
+    # ------------------------------------------------------------------ #
+    @filter.command(
+        "设置R18模式",
+        alias={"设置r18模式"},
+        priority=40,
+    )
+    async def sp_set_r18_mode(self, event: AstrMessageEvent, mode: int = -1):
         """设置 R18 模式（0 全部 / 1 非R18 / 2 R18）"""
         if not await self.guard(event):
             return
 
         if not await self.require_admin(event):
             return
-        raw = self.extract_number(event.get_message_str(), R18_TRIGGER)
-        if raw is None:
-            return
+
+        if mode >= 0 and mode in (0, 1, 2):
+            raw = str(mode)
+        else:
+            m = R18_PATTERN.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/设置R18模式 2（0:全部 1:非R18 2:R18）")
+                return
+            raw = m.group(1)
         mode = R18_MODE_MAP.get(raw, "all")
         self.settings.r18_mode = mode
         yield event.plain_result(
@@ -75,17 +121,26 @@ class RecallFeature(spFeature):
             "0:全部    1:非R18    2:R18"
         )
 
-    @filter.regex(PREFERENCE_TRIGGER, priority=40)
-    async def sp_set_image_preference(self, event: AstrMessageEvent):
+    # ------------------------------------------------------------------ #
+    # /设置图片偏好X
+    # ------------------------------------------------------------------ #
+    @filter.command("设置图片偏好", priority=40)
+    async def sp_set_image_preference(self, event: AstrMessageEvent, pref: int = -1):
         """设置图片偏好（0 无偏好 / 1 男性 / 2 女性）"""
         if not await self.guard(event):
             return
 
         if not await self.require_admin(event):
             return
-        raw = self.extract_number(event.get_message_str(), PREFERENCE_TRIGGER)
-        if raw is None:
-            return
+
+        if pref >= 0 and pref in (0, 1, 2):
+            raw = str(pref)
+        else:
+            m = PREFERENCE_PATTERN.search(event.get_message_str())
+            if not m:
+                yield event.plain_result("用法：/设置图片偏好 1（0:无 1:男 2:女）")
+                return
+            raw = m.group(1)
         order = ORDER_MAP.get(raw, "popular_d")
         self.settings.image_preference = order
         yield event.plain_result(
@@ -93,7 +148,10 @@ class RecallFeature(spFeature):
             "0:无偏好    1:男性偏好    2:女性偏好"
         )
 
-    @filter.regex(r"^/sp状态$", priority=40)
+    # ------------------------------------------------------------------ #
+    # /sp状态
+    # ------------------------------------------------------------------ #
+    @filter.command("sp状态", priority=40)
     async def sp_status(self, event: AstrMessageEvent):
         """查看涩批插件运行状态"""
         if not await self.guard(event):

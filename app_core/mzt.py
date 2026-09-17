@@ -52,8 +52,8 @@ class AlbumInfo:
 
 
 def parse_article_id(text: str) -> str | None:
-    """从 ``/写真馆12345`` 中取 ID。"""
-    match = re.match(r"^/?写真馆\s*(\d+)$", (text or "").strip())
+    """从 ``/写真馆12345`` 或 ``/写真馆 12345`` 中取 ID。"""
+    match = re.search(r"写真馆\s*(\d+)", (text or "").strip())
     return match.group(1) if match else None
 
 
