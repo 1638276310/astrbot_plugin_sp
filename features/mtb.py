@@ -2,10 +2,10 @@
 
 对应原 ``mtb.js``：
 
-* ``#随机美图吧``        —— 从已保存列表随机抽一套
-* ``#套图详情 <URL>``    —— 解析指定套图
-* ``#更新套图列表``      —— 增量采集（列表为空时自动转全量，仅主人可用）
-* ``#全量更新套图列表``  —— 全量采集（仅主人可用）
+* ``/随机美图吧``        —— 从已保存列表随机抽一套
+* ``/套图详情 <URL>``    —— 解析指定套图
+* ``/更新套图列表``      —— 增量采集（列表为空时自动转全量，仅主人可用）
+* ``/全量更新套图列表``  —— 全量采集（仅主人可用）
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ from ._base import spFeature
 from ..app_core.mtb import collect_album_urls, fetch_album_detail, parse_detail_url
 from ..app_core.storage import load_json, save_json
 
-DETAIL_TRIGGER = r"^#?套图详情\s+(https?://\S+)$"
-RANDOM_TRIGGER = r"^#?随机美图吧$"
-FULL_UPDATE_TRIGGER = r"^#?全量更新套图列表$"
-INCREMENTAL_UPDATE_TRIGGER = r"^#?更新套图列表$"
+DETAIL_TRIGGER = r"^/套图详情\s+(https?://\S+)$"
+RANDOM_TRIGGER = r"^/随机美图吧$"
+FULL_UPDATE_TRIGGER = r"^/全量更新套图列表$"
+INCREMENTAL_UPDATE_TRIGGER = r"^/更新套图列表$"
 
 
 class MtbFeature(spFeature):
@@ -37,17 +37,17 @@ class MtbFeature(spFeature):
         save_json(self.paths.jg_urls_file, urls)
 
     # ------------------------------------------------------------------ #
-    # #随机美图吧
+    # /随机美图吧
     # ------------------------------------------------------------------ #
     @filter.regex(RANDOM_TRIGGER, priority=25)
     async def sp_mtb_random(self, event: AstrMessageEvent):
-        """随机解析一套美图吧套图（#随机美图吧）"""
+        """随机解析一套美图吧套图（/随机美图吧）"""
         if not await self.guard(event):
             return
 
         urls = self.album_urls()
         if not urls:
-            yield event.plain_result("套图URL列表为空，请先使用 #更新套图列表")
+            yield event.plain_result("套图URL列表为空，请先使用 /更新套图列表")
             return
         url = random.choice(urls)
         yield event.plain_result("正在随机抽取一套美图，请稍等...")
@@ -55,11 +55,11 @@ class MtbFeature(spFeature):
             yield result
 
     # ------------------------------------------------------------------ #
-    # #套图详情 <URL>
+    # /套图详情 <URL>
     # ------------------------------------------------------------------ #
     @filter.regex(DETAIL_TRIGGER, priority=25)
     async def sp_mtb_detail(self, event: AstrMessageEvent):
-        """解析指定美图吧套图链接（#套图详情 <URL>）"""
+        """解析指定美图吧套图链接（/套图详情 <URL>）"""
         if not await self.guard(event):
             return
 
@@ -71,7 +71,7 @@ class MtbFeature(spFeature):
             yield result
 
     # ------------------------------------------------------------------ #
-    # #更新套图列表
+    # /更新套图列表
     # ------------------------------------------------------------------ #
     @filter.regex(INCREMENTAL_UPDATE_TRIGGER, priority=25)
     async def sp_mtb_incremental_update(self, event: AstrMessageEvent):
@@ -109,7 +109,7 @@ class MtbFeature(spFeature):
         )
 
     # ------------------------------------------------------------------ #
-    # #全量更新套图列表
+    # /全量更新套图列表
     # ------------------------------------------------------------------ #
     @filter.regex(FULL_UPDATE_TRIGGER, priority=25)
     async def sp_mtb_full_update(self, event: AstrMessageEvent):

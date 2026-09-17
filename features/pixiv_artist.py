@@ -1,6 +1,6 @@
 """功能：随机获取某画师的若干作品。
 
-原 ``PixivArtistWorksFetcher.js``：``#随机3张123456作品``
+原 ``PixivArtistWorksFetcher.js``：``/随机3张123456作品``
 （X 为张数，最大 20；Y 为画师 ID）。
 """
 
@@ -13,7 +13,7 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._pixiv_base import PixivBase
 
-TRIGGER = r"^#?随机(\d+)张(\d+)作品$"
+TRIGGER = r"^/随机(\d+)张(\d+)作品$"
 MAX_COUNT = 20
 
 
@@ -22,7 +22,7 @@ class PixivArtistFeature(PixivBase):
 
     @filter.regex(TRIGGER, priority=20)
     async def sp_pixiv_random_artist(self, event: AstrMessageEvent):
-        """随机获取画师作品（#随机X张Y作品，X ≤ 20）"""
+        """随机获取画师作品（/随机X张Y作品，X ≤ 20）"""
         if not await self.guard(event):
             return
 

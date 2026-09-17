@@ -2,9 +2,9 @@
 
 对应原 ``mzt.js``：
 
-* ``#写真馆<ID>``  —— 解析写真详情页，最多取 20 张图
-* ``#更新写真ID``   —— 增量爬取写真 ID 列表
-* ``#随机写真``     —— 随机取一个 ID 再解析
+* ``/写真馆<ID>``  —— 解析写真详情页，最多取 20 张图
+* ``/更新写真ID``   —— 增量爬取写真 ID 列表
+* ``/随机写真``     —— 随机取一个 ID 再解析
 """
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ class AlbumInfo:
 
 
 def parse_article_id(text: str) -> str | None:
-    """从 ``#写真馆12345`` 中取 ID。"""
-    match = re.match(r"^#?写真馆\s*(\d+)$", (text or "").strip())
+    """从 ``/写真馆12345`` 中取 ID。"""
+    match = re.match(r"^/?写真馆\s*(\d+)$", (text or "").strip())
     return match.group(1) if match else None
 
 

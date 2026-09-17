@@ -2,8 +2,8 @@
 
 对应原 ``dingyue.js`` + ``dingyue_Auto_update.js``：
 
-* ``#订阅画师<ID>`` / ``#取消订阅<ID>`` / ``#订阅列表``
-* ``#sp推送`` / ``#关闭sp推送``
+* ``/订阅画师<ID>`` / ``/取消订阅<ID>`` / ``/订阅列表``
+* ``/sp推送`` / ``/关闭sp推送``
 * 定时检查更新并推送到开启了推送的会话
 
 原插件用群号作为 key（Yunzai 只能在群里用），AstrBot 版同时支持群聊与私聊，
@@ -23,11 +23,11 @@ from ._base import spFeature
 from ..app_core.imaging import add_noise, save_bytes
 from ..app_core.storage import JsonStore
 
-SUBSCRIBE_TRIGGER = r"^#?订阅画师(\d+)$"
-UNSUBSCRIBE_TRIGGER = r"^#?取消订阅(\d+)$"
-LIST_TRIGGER = r"^#?订阅列表$"
-ENABLE_TRIGGER = r"^#?sp推送$"
-DISABLE_TRIGGER = r"^#?关闭sp推送$"
+SUBSCRIBE_TRIGGER = r"^/订阅画师(\d+)$"
+UNSUBSCRIBE_TRIGGER = r"^/取消订阅(\d+)$"
+LIST_TRIGGER = r"^/订阅列表$"
+ENABLE_TRIGGER = r"^/sp推送$"
+DISABLE_TRIGGER = r"^/关闭sp推送$"
 
 PUSH_MAX_WORKS = 3
 PUSH_INTERVAL_SECONDS = 10
@@ -58,11 +58,11 @@ class SubscribeFeature(spFeature):
         self.store().set(data, persist=True)
 
     # ------------------------------------------------------------------ #
-    # #订阅画师<ID>
+    # /订阅画师<ID>
     # ------------------------------------------------------------------ #
     @filter.regex(SUBSCRIBE_TRIGGER, priority=20)
     async def sp_subscribe(self, event: AstrMessageEvent):
-        """订阅画师更新（#订阅画师<ID>）"""
+        """订阅画师更新（/订阅画师<ID>）"""
         if not await self.guard(event):
             return
 
@@ -116,11 +116,11 @@ class SubscribeFeature(spFeature):
         yield event.plain_result(f"成功订阅画师{artist_id}（{artist_name}）")
 
     # ------------------------------------------------------------------ #
-    # #取消订阅<ID>
+    # /取消订阅<ID>
     # ------------------------------------------------------------------ #
     @filter.regex(UNSUBSCRIBE_TRIGGER, priority=20)
     async def sp_unsubscribe(self, event: AstrMessageEvent):
-        """取消订阅画师（#取消订阅<ID>）"""
+        """取消订阅画师（/取消订阅<ID>）"""
         if not await self.guard(event):
             return
 
@@ -138,11 +138,11 @@ class SubscribeFeature(spFeature):
         yield event.plain_result(f"成功取消订阅{artist_id}")
 
     # ------------------------------------------------------------------ #
-    # #订阅列表
+    # /订阅列表
     # ------------------------------------------------------------------ #
     @filter.regex(LIST_TRIGGER, priority=20)
     async def sp_subscribe_list(self, event: AstrMessageEvent):
-        """查看本会话已订阅的画师（#订阅列表）"""
+        """查看本会话已订阅的画师（/订阅列表）"""
         if not await self.guard(event):
             return
 
@@ -160,11 +160,11 @@ class SubscribeFeature(spFeature):
         yield event.plain_result("\n".join(lines))
 
     # ------------------------------------------------------------------ #
-    # #sp推送 / #关闭sp推送
+    # /sp推送 / /关闭sp推送
     # ------------------------------------------------------------------ #
     @filter.regex(ENABLE_TRIGGER, priority=20)
     async def sp_enable_push(self, event: AstrMessageEvent):
-        """开启画师更新推送（#sp推送）"""
+        """开启画师更新推送（/sp推送）"""
         if not await self.guard(event):
             return
 
@@ -181,7 +181,7 @@ class SubscribeFeature(spFeature):
 
     @filter.regex(DISABLE_TRIGGER, priority=20)
     async def sp_disable_push(self, event: AstrMessageEvent):
-        """关闭画师更新推送（#关闭sp推送）"""
+        """关闭画师更新推送（/关闭sp推送）"""
         if not await self.guard(event):
             return
 

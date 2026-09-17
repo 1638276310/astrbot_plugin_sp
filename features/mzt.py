@@ -2,9 +2,9 @@
 
 对应原 ``mzt.js``：
 
-* ``#写真馆<ID>``  —— 获取指定写真
-* ``#随机写真``    —— 随机取一个已保存的 ID
-* ``#更新写真ID``  —— 增量更新 ID 列表（仅主人可用）
+* ``/写真馆<ID>``  —— 获取指定写真
+* ``/随机写真``    —— 随机取一个已保存的 ID
+* ``/更新写真ID``  —— 增量更新 ID 列表（仅主人可用）
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from ._base import spFeature
 from ..app_core.mzt import collect_article_ids, fetch_album, parse_article_id
 from ..app_core.storage import load_json, save_json
 
-ID_LIST_TRIGGER = r"^#?更新写真(?:ID|id)$"
-RANDOM_TRIGGER = r"^#?随机写真$"
+ID_LIST_TRIGGER = r"^/更新写真(?:ID|id)$"
+RANDOM_TRIGGER = r"^/随机写真$"
 
 
 class MztFeature(spFeature):
@@ -35,11 +35,11 @@ class MztFeature(spFeature):
         save_json(self.paths.mzt_ids_file, ids)
 
     # ------------------------------------------------------------------ #
-    # #写真馆<ID>
+    # /写真馆<ID>
     # ------------------------------------------------------------------ #
-    @filter.regex(r"^#?写真馆(\d+)$", priority=20)
+    @filter.regex(r"^/写真馆(\d+)$", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
-        """获取妹子图写真（#写真馆<ID>）"""
+        """获取妹子图写真（/写真馆<ID>）"""
         if not await self.guard(event):
             return
 
@@ -51,17 +51,17 @@ class MztFeature(spFeature):
             yield result
 
     # ------------------------------------------------------------------ #
-    # #随机写真
+    # /随机写真
     # ------------------------------------------------------------------ #
     @filter.regex(RANDOM_TRIGGER, priority=20)
     async def sp_mzt_random(self, event: AstrMessageEvent):
-        """随机获取妹子图（#随机写真）"""
+        """随机获取妹子图（/随机写真）"""
         if not await self.guard(event):
             return
 
         ids = self.mzt_ids()
         if not ids:
-            yield event.plain_result("写真ID列表为空，请先使用 #更新写真ID")
+            yield event.plain_result("写真ID列表为空，请先使用 /更新写真ID")
             return
         article_id = random.choice(ids)
         yield event.plain_result(f"写真ID：{article_id} 正在搜索，请稍等...")
@@ -69,7 +69,7 @@ class MztFeature(spFeature):
             yield result
 
     # ------------------------------------------------------------------ #
-    # #更新写真ID
+    # /更新写真ID
     # ------------------------------------------------------------------ #
     @filter.regex(ID_LIST_TRIGGER, priority=20)
     async def sp_mzt_update_ids(self, event: AstrMessageEvent):

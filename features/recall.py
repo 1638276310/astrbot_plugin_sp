@@ -12,10 +12,10 @@ from astrbot.api import logger  # type: ignore
 from ._base import spFeature
 from ..app_core.settings import ORDER_LABEL, ORDER_MAP, R18_MODE_LABEL, R18_MODE_MAP
 
-TOGGLE_TRIGGER = r"^#?(?:开启|关闭)(?:sp|涩批|色胚|色批|色皮)撤回$"
-TIME_TRIGGER = r"^#?设置(?:sp|涩批|色皮|色批)撤回(\d+)$"
-R18_TRIGGER = r"^#?设置R18模式(0|1|2)$"
-PREFERENCE_TRIGGER = r"^#?设置图片偏好(0|1|2)$"
+TOGGLE_TRIGGER = r"^/(?:开启|关闭)(?:sp|涩批|色胚|色批|色皮)撤回$"
+TIME_TRIGGER = r"^/设置(?:sp|涩批|色皮|色批)撤回(\d+)$"
+R18_TRIGGER = r"^/设置R18模式(0|1|2)$"
+PREFERENCE_TRIGGER = r"^/设置图片偏好(0|1|2)$"
 
 
 class RecallFeature(spFeature):
@@ -23,14 +23,14 @@ class RecallFeature(spFeature):
 
     @filter.regex(TOGGLE_TRIGGER, priority=40)
     async def sp_toggle_recall(self, event: AstrMessageEvent):
-        """开启/关闭涩批消息撤回"""
+        """开启/关闭涩批消息撤回（/开启sp撤回 / /关闭sp撤回）"""
         if not await self.guard(event):
             return
 
         if not await self.require_admin(event):
             return
         message = event.get_message_str()
-        enabled = message.startswith("#开启") or message.startswith("开启")
+        enabled = message.startswith("/开启") or message.startswith("开启")
         self.settings.recall = enabled
         if enabled:
             yield event.plain_result(
@@ -93,7 +93,7 @@ class RecallFeature(spFeature):
             "0:无偏好    1:男性偏好    2:女性偏好"
         )
 
-    @filter.regex(r"^#?sp状态$", priority=40)
+    @filter.regex(r"^/sp状态$", priority=40)
     async def sp_status(self, event: AstrMessageEvent):
         """查看涩批插件运行状态"""
         if not await self.guard(event):

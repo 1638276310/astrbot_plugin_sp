@@ -2,8 +2,8 @@
 
 对应原 ``MagnetLinkFetcher.js``（验车）与 ``MagnetLinkMao.js``（磁力猫搜索）。
 
-* ``#验车<magnet:...>``                       —— 查询磁力链接详情并发送截图
-* ``#磁力猫 <关键词> [类型] [排序] [数量]``    —— 磁力猫搜索
+* ``/验车<magnet:...>``                       —— 查询磁力链接详情并发送截图
+* ``/磁力猫 <关键词> [类型] [排序] [数量]``    —— 磁力猫搜索
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ from ._base import spFeature
 from ..app_core.magnetcat import describe_results, parse_command, search_magnet
 from ..app_core.verify import fetch_magnet_info
 
-VERIFY_TRIGGER = r"^#验车(magnet:.+)$"
-# 与原 `^#?磁力猫(.*)$` 等价，但要求后面必须有非空关键词，
+VERIFY_TRIGGER = r"^/验车(magnet:.+)$"
+# 与原 `^/磁力猫(.*)$` 等价，但要求后面必须有非空关键词，
 # 避免抢占其他插件的消息。
-MAGNETCAT_TRIGGER = r"^#?磁力猫\s*\S+"
+MAGNETCAT_TRIGGER = r"^/磁力猫\s*\S+"
 
 VERIFY_RETRY = 3
 VERIFY_RETRY_DELAY = 2.0
@@ -29,11 +29,11 @@ class MagnetFeature(spFeature):
     """磁力相关指令。"""
 
     # ------------------------------------------------------------------ #
-    # #验车
+    # /验车
     # ------------------------------------------------------------------ #
     @filter.regex(VERIFY_TRIGGER, priority=20)
     async def sp_verify_magnet(self, event: AstrMessageEvent):
-        """查询磁力链接详情（#验车<magnet:...>）"""
+        """查询磁力链接详情（/验车<magnet:...>）"""
         if not await self.guard(event):
             return
 
@@ -121,11 +121,11 @@ class MagnetFeature(spFeature):
             yield event.chain_result(self.image_chain(paths))
 
     # ------------------------------------------------------------------ #
-    # #磁力猫
+    # /磁力猫
     # ------------------------------------------------------------------ #
     @filter.regex(MAGNETCAT_TRIGGER, priority=20)
     async def sp_magnet_cat(self, event: AstrMessageEvent):
-        """磁力猫搜索（#磁力猫 关键词 [类型] [排序] [数量]）"""
+        """磁力猫搜索（/磁力猫 关键词 [类型] [排序] [数量]）"""
         if not await self.guard(event):
             return
 

@@ -46,12 +46,12 @@ class MagnetResult:
 
 
 def parse_command(text: str) -> tuple[str, str, str, int] | None:
-    """解析 ``#磁力猫 关键词 [类型] [排序] [数量]``。
+    """解析 ``/磁力猫 关键词 [类型] [排序] [数量]``。
 
     返回 (关键词, 文件类型, 排序, 数量) 或 None。
     """
     match = re.match(
-        r"^#?磁力猫\s*(\S+)(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\d+))?$",
+        r"^/?磁力猫\s*(\S+)(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\d+))?$",
         (text or "").strip(),
     )
     if not match:

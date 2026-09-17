@@ -21,7 +21,7 @@
 ├── requirements.txt              # 依赖
 ├── README.md
 ├── assets/
-│   └── 说明.txt                  # 放 help.jpg 即可使用 #涩批图片帮助
+│   └── 说明.txt                  # 放 help.jpg 即可使用 /涩批图片帮助
 ├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
 │   ├── settings.py               # 配置读取 + 上游接口与常量
@@ -45,9 +45,9 @@
     ├── recall.py                 # 撤回 / R18 / 图片偏好 / 状态
     ├── urls.py                   # 网址导航
     ├── sj.py                     # 随机短视频
-    ├── pixiv_pid.py              # #pid
-    ├── pixiv_artist.py           # #随机X张Y作品
-    ├── pixiv_tag.py              # #来X张XX图
+    ├── pixiv_pid.py              # /pid
+    ├── pixiv_artist.py           # /随机X张Y作品
+    ├── pixiv_tag.py              # /来X张XX图
     ├── mzt.py                    # 妹子图
     ├── mtb.py                    # 美图吧套图
     ├── magnet.py                 # 磁力猫 / 验车
@@ -97,15 +97,15 @@ playwright install chromium
 ### 5. 可选：放帮助图
 
 把原插件的 `config/help.jpg` 复制成 `assets/help.jpg`，
-这样 `#涩批图片帮助` 会直接发这张图；不放则会自动用 HTML 渲染文字帮助图。
+这样 `/涩批图片帮助` 会直接发这张图；不放则会自动用 HTML 渲染文字帮助图。
 
 ---
 
 ## 三、指令一览
 
 > AstrBot 中唤醒前缀默认是 `/`。本插件的指令使用**正则匹配**，
-> **群聊里 @机器人 或加 `/` 都能触发，私聊直接发也能触发**。
-> 下面写的 `#` 是原插件习惯，实际发送时 `#` 可有可无。
+> 所有指令都以 `/` 开头（例如 `/涩批文字帮助`、`/pid123456`、`/骚鸡`），
+> 群聊里 @机器人 或消息以 `/` 开头都能触发，私聊直接发也能触发。
 
 ### 帮助
 
@@ -140,7 +140,7 @@ playwright install chromium
 | `随机3张123456作品` | 随机取该画师 3 张作品（张数 ≤ 20） |
 | `来10张白丝图` | 按标签搜索 10 张图（数量 ≤ 60） |
 
-`来X张XX图` 受 `#设置R18模式` 与 `#设置图片偏好` 影响。
+`来X张XX图` 受 `/设置R18模式` 与 `/设置图片偏好` 影响。
 
 ### 美图吧 / 套图（`features/mtb.py`）
 
@@ -269,12 +269,12 @@ R18 模式、图片偏好、撤回设置等直接保存在插件配置中，WebU
 | `config/recall.yaml` | `_conf_schema.json` 中的 `recall` / `recall_time` / `r18_mode` / `image_preference` |
 | `config/dingyue.yaml` | `dingyue.json` |
 | `lib/sharp-pixel.js` | `app_core/imaging.py` 的 `add_noise()` |
-| `index.js` | `main.py` + `features/plugin.py` |
+| `index.js` | `main.py`（已合并 `features/plugin.py` 的全部逻辑，该文件已删除） |
 
 ### 有意做出的行为调整
 
-1. **`#更新套图列表` / `#全量更新套图列表`** 结束后会把"本次新增 / 现有总计"一起报出来，便于确认是否真的新增了内容。
-2. **`#设置R18模式` / `#设置图片偏好` / `#设置sp撤回X`** 做了取值校验，超出范围会提示而不是直接写入。
+1. **`/更新套图列表` / `/全量更新套图列表`** 结束后会把"本次新增 / 现有总计"一起报出来，便于确认是否真的新增了内容。
+2. **`/设置R18模式` / `/设置图片偏好` / `/设置sp撤回X`** 做了取值校验，超出范围会提示而不是直接写入。
 3. **推送不再依赖 Yunzai 的 `schedule`**：改为插件内部的 asyncio 调度器，
    订阅检查按 `subscribe_check_interval` 小时执行，写真 ID / 套图列表在设定时间每日执行。
 4. **合并转发**：原插件需要针对 NapCat 手写 `send_group_forward_msg`，

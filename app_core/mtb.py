@@ -2,10 +2,10 @@
 
 对应原 ``mtb.js``：
 
-* ``#随机美图吧``      —— 从已保存的套图链接里随机抽一套
-* ``#套图详情 <URL>``  —— 解析指定套图并发送全部图片
-* ``#更新套图列表``    —— 增量采集前 N 页
-* ``#全量更新套图列表``—— 从第一页采到最后一页
+* ``/随机美图吧``      —— 从已保存的套图链接里随机抽一套
+* ``/套图详情 <URL>``  —— 解析指定套图并发送全部图片
+* ``/更新套图列表``    —— 增量采集前 N 页
+* ``/全量更新套图列表``—— 从第一页采到最后一页
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ INCREMENTAL_MAX_PAGES = 2
 COLLECT_RETRY = 3
 PAGE_INFO_SELECTOR = "div.list div.w1200 div.page span.pageinfo"
 ERROR_PAGE_PATTERN = re.compile(r"共\s*(\d+)\s*页")
-DETAIL_URL_PATTERN = re.compile(r"^#?套图详情\s+(https?://\S+)$")
+DETAIL_URL_PATTERN = re.compile(r"^/?套图详情\s+(https?://\S+)$")
 
 
 class AlbumDetail:

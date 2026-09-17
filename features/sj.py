@@ -1,6 +1,6 @@
 """功能：随机短视频（骚鸡/烧鸡/sj）。
 
-对应原 ``sj.js``：从配置的视频直链里随机取一个，下载后发送。
+对应原 ``sj.js``：从持久化的视频直链列表里随机取一个，下载后发送。
 AstrBot 的 Video 组件可以直接吃网络 URL，但快手 CDN 需要 Referer，
 所以这里先下载到临时目录再用本地文件发送。
 """
@@ -15,7 +15,7 @@ from ._base import spFeature
 from ..app_core.http import fetch_bytes
 from ..app_core.storage import load_json, save_json
 
-TRIGGER = r"^#?(?:骚鸡|烧鸡|sj)$"
+TRIGGER = r"^/(?:骚鸡|烧鸡|sj)$"
 
 REFERER = "https://www.kuaishou.com/"
 

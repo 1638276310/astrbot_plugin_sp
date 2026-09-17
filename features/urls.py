@@ -1,7 +1,7 @@
 """功能：多类型网址导航。
 
-对应原 ``multiUrl.js``：``#写真网址`` / ``#福利网址`` / ``#吃瓜网址`` /
-``#导航网址`` / ``#福利App`` / ``#TG电报``。
+对应原 ``multiUrl.js``：``/写真网址`` / ``/福利网址`` / ``/吃瓜网址`` /
+``/导航网址`` / ``/福利App`` / ``/TG电报``。
 
 网址列表全部来自插件配置 ``url_groups``，可以在 WebUI 里增删。
 """
@@ -12,7 +12,7 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._base import spFeature
 
-TRIGGER = r"^#?(?:写真网址|福利网址|吃瓜网址|导航网址|福利(?:App|APP|app)|TG电报)$"
+TRIGGER = r"^/(?:写真网址|福利网址|吃瓜网址|导航网址|福利(?:App|APP|app)|TG电报)$"
 
 
 class UrlFeature(spFeature):
@@ -24,7 +24,7 @@ class UrlFeature(spFeature):
         if not await self.guard(event):
             return
 
-        command = event.get_message_str().strip().lstrip("#")
+        command = event.get_message_str().strip().lstrip("/")
         group = self._resolve_group(command)
         if group is None:
             yield event.plain_result("未识别的网址类型。")
@@ -46,7 +46,7 @@ class UrlFeature(spFeature):
         footer = [
             "",
             "⚠️ 提示：网址仅供参考，请谨慎访问",
-            f"#{group}网址 可再次获取",
+            f"/{group}网址 可再次获取",
             "请复制链接到浏览器打开，切勿直接点击",
         ]
         text = "\n".join(header + body + footer)

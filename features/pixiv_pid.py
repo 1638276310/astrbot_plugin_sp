@@ -1,6 +1,6 @@
 """功能：按 PID 获取 P 站作品。
 
-原 ``pid.js``：``#pid123456`` —— 取作品详情、下载全部图片、合并转发。
+原 ``pid.js``：``/pid123456`` —— 取作品详情、下载全部图片、合并转发。
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._pixiv_base import PixivBase
 
-TRIGGER = r"^#?pid(\d+)$"
+TRIGGER = r"^/pid(\d+)$"
 
 
 class PixivPidFeature(PixivBase):
@@ -17,7 +17,7 @@ class PixivPidFeature(PixivBase):
 
     @filter.regex(TRIGGER, priority=20)
     async def sp_pixiv_pid(self, event: AstrMessageEvent):
-        """按 PID 获取 P 站作品"""
+        """按 PID 获取 P 站作品（/pid<数字>）"""
         if not await self.guard(event):
             return
 

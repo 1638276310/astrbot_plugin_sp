@@ -6,9 +6,9 @@
 * ``features/recall.py``      撤回 / R18 / 图片偏好 / 状态
 * ``features/urls.py``        网址导航
 * ``features/sj.py``          短视频
-* ``features/pixiv_pid.py``   #pid
-* ``features/pixiv_artist.py``#随机X张Y作品
-* ``features/pixiv_tag.py``   #来X张XX图
+* ``features/pixiv_pid.py``   /pid
+* ``features/pixiv_artist.py`` /随机X张Y作品
+* ``features/pixiv_tag.py``   /来X张XX图
 * ``features/mzt.py``         妹子图
 * ``features/mtb.py``         美图吧套图
 * ``features/magnet.py``      磁力猫 / 验车

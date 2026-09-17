@@ -1,6 +1,6 @@
 """功能：二/三次元图包。
 
-对应原 ``tu.js``：``#2图``（二次元）与 ``#3图``（三次元/现实），
+对应原 ``tu.js``：``/2图``（二次元）与 ``/3图``（三次元/现实），
 从配置的接口随机拉取 10 张图。
 """
 
@@ -11,7 +11,7 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from ._base import spFeature
 from ..app_core.http import fetch_bytes
 
-TRIGGER = r"^#?(2图|3图)$"
+TRIGGER = r"^/(2图|3图)$"
 IMAGE_COUNT = 10
 CATEGORY_MAP = {"2图": "acg", "3图": "reality"}
 TYPE_NAME = {"2图": "二次元图片", "3图": "现实图片"}
@@ -22,11 +22,11 @@ class CosImageFeature(spFeature):
 
     @filter.regex(TRIGGER, priority=60)
     async def sp_cos_images(self, event: AstrMessageEvent):
-        """获取二次元/现实图包（#2图 或 #3图）"""
+        """获取二次元/现实图包（/2图 或 /3图）"""
         if not await self.guard(event):
             return
 
-        command = event.get_message_str().strip().lstrip("#")
+        command = event.get_message_str().strip().lstrip("/")
         category = CATEGORY_MAP.get(command)
         if not category:
             return
