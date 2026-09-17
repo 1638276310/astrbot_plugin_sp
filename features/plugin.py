@@ -66,7 +66,7 @@ class spPlugin(
         Star.__init__(self, context)
         # 注入运行时依赖：配置 + 数据目录
         self.settings = build_settings(config)
-        self.paths = PluginPaths(PLUGIN_NAME)
+        self.paths = PluginPaths(context)
         self.setup_feature(self.settings, self.paths)
         self._subscribe_store = JsonStore(self.paths.subscribe_file, {})
         self.scheduler: TimeBasedScheduler | None = None

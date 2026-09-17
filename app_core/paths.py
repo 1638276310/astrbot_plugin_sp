@@ -13,11 +13,13 @@ import time
 from pathlib import Path
 
 try:  # AstrBot >= 4.x
-    # from astrbot.core.utils.astrbot_path import get_astrbot_data_path # type: ignore
-    # from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-    from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path # type: ignore
+    from astrbot.core.utils.astrbot_path import (  # type: ignore
+        get_astrbot_data_path,
+        get_astrbot_plugin_data_path,
+    )
 except Exception:  # pragma: no cover - 兼容极旧版本
     get_astrbot_plugin_data_path = None
+    get_astrbot_data_path = None
 
 PLUGIN_NAME = "astrbot_plugin_sp"
 
@@ -25,9 +27,12 @@ PLUGIN_NAME = "astrbot_plugin_sp"
 class PluginPaths:
     """负责解析并创建插件所需的全部目录。"""
 
-    def __init__(self, plugin_name: str = PLUGIN_NAME) -> None:
+    def __init__(self, context=None, plugin_name: str = PLUGIN_NAME) -> None:
         self.plugin_name = plugin_name or PLUGIN_NAME
-        self.root = self._resolve_root() / self.plugin_name
+        if context and hasattr(context, "get_data_dir"):
+            self.root = Path(context.get_data_dir())
+        else:
+            self.root = self._resolve_root() / self.plugin_name
         self.temp = self.root / "temp"
         self.cache = self.root / "cache"
         self.assets = Path(__file__).resolve().parent.parent / "assets"
@@ -42,6 +47,11 @@ class PluginPaths:
                 return Path(get_astrbot_plugin_data_path())
             except Exception:  # pragma: no cover
                 pass
+        if get_astrbot_data_path is not None:
+            try:
+                return Path(get_astrbot_data_path()) / "plugin_data"
+            except Exception:  # pragma: no cover
+                pass
         # 兜底：AstrBot 根目录下的 data/plugin_data
         env_root = os.environ.get("ASTRBOT_ROOT")
         base = Path(env_root) if env_root else Path(os.getcwd())
@@ -50,6 +60,7 @@ class PluginPaths:
     def _ensure(self) -> None:
         for path in (self.root, self.temp, self.cache):
             path.mkdir(parents=True, exist_ok=True)
+        self.ensure_video_urls()
 
     # ------------------------------------------------------------------ #
     # 常用文件
@@ -68,6 +79,22 @@ class PluginPaths:
     def subscribe_file(self) -> Path:
         """画师订阅数据。"""
         return self.root / "dingyue.json"
+
+    @property
+    def video_urls_file(self) -> Path:
+        """骚鸡短视频直链列表。"""
+        return self.root / "sp_video_urls.json"
+
+    def ensure_video_urls(self) -> Path:
+        """确保持久化视频列表文件存在，若不存在则从 assets/sp_video_urls.json 初始化。"""
+        if not self.video_urls_file.exists():
+            asset_file = self.asset("sp_video_urls.json")
+            if asset_file.exists():
+                try:
+                    shutil.copyfile(asset_file, self.video_urls_file)
+                except OSError:
+                    pass
+        return self.video_urls_file
 
     @property
     def runtime_file(self) -> Path:

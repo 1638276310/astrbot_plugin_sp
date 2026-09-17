@@ -206,7 +206,6 @@ playwright install chromium
 | `mzt_site` | `https://kkmzt.com` | 妹子图站点 |
 | `mtb_site` | `https://www.ku1373.cc` | 美图吧站点 |
 | `cos_api` | `https://img.mengxix.top/` | 2图/3图接口 |
-| `sp_video_urls` | 4 个直链 | 骚鸡视频列表 |
 | `url_groups` | 6 组网址 | 网址导航内容 |
 | `recall` / `recall_time` | `true` / `40` | 撤回开关与秒数 |
 | `r18_mode` / `image_preference` | `all` / `popular_d` | 搜索过滤 |
@@ -235,6 +234,7 @@ playwright install chromium
 
 | 文件 | 内容 |
 | --- | --- |
+| `sp_video_urls.json` | 骚鸡视频直链列表（首次运行自动从 assets 释放 3.9w+ 内置网址，避免卡死配置页面且更新不覆盖） |
 | `dingyue.json` | 画师订阅数据 |
 | `mztids.json` | 妹子图写真 ID 列表 |
 | `jg.json` | 美图吧套图 URL 列表 |

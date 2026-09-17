@@ -98,12 +98,9 @@ URL_GROUP_ALIASES: dict[str, str] = {
     "TG电报": "TG电报",
 }
 
-DEFAULT_VIDEO_URLS = [
-    "https://alimov2.a.kwimgs.com/upic/2024/03/06/19/BMjAyNDAzMDYxOTAxMzZfMzM4Nzk3MDMwOF8xMjY2NzUxODQ0ODJfMV8z_b_B507c9ecf6702796d570936abc84a2eb7.mp4",
-    "https://txmov2.a.kwimgs.com/upic/2024/03/04/19/BMjAyNDAzMDQxOTE1MzBfMzM4Nzk3MDMwOF8xMjY1Mzk5NjQzNTdfMV8z_b_B10293d5a0c03a1cd548b91c6e436e4f0.mp4",
-    "https://alimov2.a.kwimgs.com/upic/2022/11/10/18/BMjAyMjExMTAxODMxNTRfMTIzOTM2NTY5M184ODM5ODA4MDgwNl8xXzM=_b_B5740981dba5ce3a90e3aa951ec1225c4.mp4",
-    "https://alimov2.a.kwimgs.com/upic/2022/11/04/19/BMjAyMjExMDQxOTQ3NTdfMTIzOTM2NTY5M184Nzk1NjYyNDcyNF8xXzM=_b_B6bc067b9704873bd38e79f38d4ffc9d4.mp4",
-]
+# 骚鸡视频直链已按照 AstrBot 规范统一迁移至 data/plugin_data/<plugin_name>/sp_video_urls.json 持久化存储
+# 避免海量视频直链卡死 WebUI 配置文件，此处保留空列表作为配置项兼容兜底。
+DEFAULT_VIDEO_URLS: list[str] = []
 
 # 磁力猫文件类型 / 排序映射（与原 MagnetLinkMao.js 一致）
 FILE_TYPE_MAP = {
