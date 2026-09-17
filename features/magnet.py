@@ -33,6 +33,7 @@ class MagnetFeature(spFeature):
     @filter.command("验车", priority=20)
     async def sp_verify_magnet(self, event: AstrMessageEvent, magnet: str = ""):
         """查询磁力链接详情（/验车 magnet:...）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -128,6 +129,7 @@ class MagnetFeature(spFeature):
     @filter.command("磁力猫", priority=20)
     async def sp_magnet_cat(self, event: AstrMessageEvent, keyword: str = "", file_type: str = "", order: str = "", count: int = 10):
         """磁力猫搜索（/磁力猫 关键词 [类型] [排序] [数量]）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

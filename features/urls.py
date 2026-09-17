@@ -23,6 +23,7 @@ class UrlFeature(spFeature):
     )
     async def sp_send_urls(self, event: AstrMessageEvent):
         """获取各类网站地址（写真/福利/吃瓜/导航/福利App/TG电报）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

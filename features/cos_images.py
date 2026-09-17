@@ -19,17 +19,45 @@ TYPE_NAME = {"2图": "二次元图片", "3图": "现实图片"}
 class CosImageFeature(spFeature):
     """2图 / 3图指令。"""
 
-    @filter.command("2图", alias={"3图"}, priority=60)
+    @filter.command("2图", priority=60)
     async def sp_cos_images(self, event: AstrMessageEvent):
-        """获取二次元/现实图包（/2图 或 /3图）"""
+        """获取二次元图包（/2图）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
-        command = event.get_message_str().strip().lstrip("/")
-        category = CATEGORY_MAP.get(command)
-        if not category:
+        command = "2图"
+        category = CATEGORY_MAP[command]
+        type_name = TYPE_NAME[command]
+
+        yield event.plain_result(f"正在获取{type_name}，请稍等...")
+
+        base = self.settings.cos_api
+        separator = "&" if "?" in base else "?"
+        url = f"{base}{separator}category={category}"
+
+        paths = await self._download_cos_images(url, prefix=category)
+        if not paths:
+            yield event.plain_result("未能获取到图片，请稍后再试。")
             return
-        type_name = TYPE_NAME.get(command, "图片")
+
+        if self.settings.forward_as_node:
+            nodes = self.image_nodes(event, paths)
+            for batch in self.build_batches(nodes):
+                yield event.chain_result([self.wrap_nodes(batch)])
+        else:
+            yield event.chain_result(self.image_chain(paths))
+
+    @filter.command("3图", priority=60)
+    async def sp_cos_images_3d(self, event: AstrMessageEvent):
+        """获取三次元/现实图包（/3图）"""
+        self.stop_event_if_needed(event)
+        if not await self.guard(event):
+            return
+
+        command = "3图"
+        category = CATEGORY_MAP[command]
+        type_name = TYPE_NAME[command]
 
         yield event.plain_result(f"正在获取{type_name}，请稍等...")
 

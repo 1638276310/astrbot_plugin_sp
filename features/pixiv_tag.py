@@ -25,6 +25,7 @@ class PixivTagFeature(PixivBase):
     @filter.command("来", priority=20)
     async def sp_pixiv_tag(self, event: AstrMessageEvent):
         """按标签搜索 P 站图片（/来 X 张 XX图，X ≤ 60）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

@@ -61,6 +61,7 @@ class SubscribeFeature(spFeature):
     @filter.command("订阅画师", priority=20)
     async def sp_subscribe(self, event: AstrMessageEvent, artist_id: str = ""):
         """订阅画师更新（/订阅画师 <ID>）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -123,6 +124,7 @@ class SubscribeFeature(spFeature):
     @filter.command("取消订阅", priority=20)
     async def sp_unsubscribe(self, event: AstrMessageEvent, artist_id: str = ""):
         """取消订阅画师（/取消订阅 <ID>）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -149,6 +151,7 @@ class SubscribeFeature(spFeature):
     @filter.command("订阅列表", priority=20)
     async def sp_subscribe_list(self, event: AstrMessageEvent):
         """查看本会话已订阅的画师（/订阅列表）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -171,6 +174,7 @@ class SubscribeFeature(spFeature):
     @filter.command("sp推送", priority=20)
     async def sp_enable_push(self, event: AstrMessageEvent):
         """开启画师更新推送（/sp推送）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -188,6 +192,7 @@ class SubscribeFeature(spFeature):
     @filter.command("关闭sp推送", priority=20)
     async def sp_disable_push(self, event: AstrMessageEvent):
         """关闭画师更新推送（/关闭sp推送）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

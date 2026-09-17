@@ -45,6 +45,21 @@ class spFeature(MessageMixin, AdminMixin):
             self._file_cache_instance = cache
         return cache
 
+    @staticmethod
+    def stop_event_if_needed(event) -> None:
+        """命中指令后立刻停止事件。
+
+        AstrBot 中，一个 handler 若没有调用 ``stop_event()``，事件会继续
+        流转到后续的 handler；当没有任何 handler 拦截时，消息最终会被
+        默认的 LLM / 聊天回复接管。get_px 等插件的所有指令 handler 都
+        在入口处调用 ``event.stop_event()``，本插件的 Mixin 指令统一
+        通过这个入口做同样的事，保证指令被自己消费、不会"漏"给 LLM。
+        """
+        try:
+            event.stop_event()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------ #
     # 访问控制
     # ------------------------------------------------------------------ #

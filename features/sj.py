@@ -49,6 +49,7 @@ class VideoFeature(spFeature):
     @filter.command("骚鸡", alias={"烧鸡", "sj"}, priority=20)
     async def sp_random_video(self, event: AstrMessageEvent):
         """随机发送一个涩批视频"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

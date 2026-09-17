@@ -37,6 +37,7 @@ class MztFeature(spFeature):
     @filter.command("写真馆", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
         """获取妹子图写真（/写真馆 <ID>）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -54,6 +55,7 @@ class MztFeature(spFeature):
     @filter.command("随机写真", priority=20)
     async def sp_mzt_random(self, event: AstrMessageEvent):
         """随机获取妹子图（/随机写真）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -72,6 +74,7 @@ class MztFeature(spFeature):
     @filter.command("更新写真ID", alias={"更新写真id"}, priority=20)
     async def sp_mzt_update_ids(self, event: AstrMessageEvent):
         """增量更新写真ID列表（仅主人可用）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

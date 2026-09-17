@@ -23,6 +23,7 @@ class PixivArtistFeature(PixivBase):
     @filter.command("随机", priority=20)
     async def sp_pixiv_random_artist(self, event: AstrMessageEvent):
         """随机获取画师作品（/随机 X 张 Y 作品，X ≤ 20）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

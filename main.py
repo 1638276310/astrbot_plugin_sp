@@ -74,7 +74,7 @@ class spPlugin(
     """
 
     def __init__(self, context: Context, config=None) -> None:
-        Star.__init__(self, context)
+        super().__init__(context, config)
         # 注入运行时依赖：配置 + 数据目录
         self.settings = build_settings(config)
         self.paths = PluginPaths(context)

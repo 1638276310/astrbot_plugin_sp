@@ -17,10 +17,12 @@ desc: |
   - 视频：/骚鸡 / /烧鸡 / /sj
   - 订阅推送：/订阅画师 <ID> / /取消订阅 <ID> / /订阅列表 / /sp推送 / /关闭sp推送
   - 设置：/开启sp撤回 / /关闭sp撤回 / /设置sp撤回 X / /设置R18模式 X / /设置图片偏好 X
-version: v1.0
+version: v1.1
 author: 寂寞沙洲冷
 repo: https://github.com/1638276310/astrbot_plugin_sp
 astrbot_version: ">=4.5.7"
+support_platforms:
+  - aiocqhttp
 tags:
   - 涩批
   - pixiv

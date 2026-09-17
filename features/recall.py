@@ -43,6 +43,7 @@ class RecallFeature(spFeature):
     )
     async def sp_toggle_recall(self, event: AstrMessageEvent):
         """开启/关闭涩批消息撤回（/开启sp撤回 / /关闭sp撤回）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -68,6 +69,7 @@ class RecallFeature(spFeature):
     )
     async def sp_set_recall_time(self, event: AstrMessageEvent, seconds: int = 0):
         """设置涩批消息撤回时间（10-120 秒）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -100,6 +102,7 @@ class RecallFeature(spFeature):
     )
     async def sp_set_r18_mode(self, event: AstrMessageEvent, mode: int = -1):
         """设置 R18 模式（0 全部 / 1 非R18 / 2 R18）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -127,6 +130,7 @@ class RecallFeature(spFeature):
     @filter.command("设置图片偏好", priority=40)
     async def sp_set_image_preference(self, event: AstrMessageEvent, pref: int = -1):
         """设置图片偏好（0 无偏好 / 1 男性 / 2 女性）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -154,6 +158,7 @@ class RecallFeature(spFeature):
     @filter.command("sp状态", priority=40)
     async def sp_status(self, event: AstrMessageEvent):
         """查看涩批插件运行状态"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

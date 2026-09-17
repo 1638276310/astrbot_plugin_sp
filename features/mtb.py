@@ -41,6 +41,7 @@ class MtbFeature(spFeature):
     @filter.command("随机美图吧", priority=25)
     async def sp_mtb_random(self, event: AstrMessageEvent):
         """随机解析一套美图吧套图（/随机美图吧）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -59,6 +60,7 @@ class MtbFeature(spFeature):
     @filter.command("套图详情", priority=25)
     async def sp_mtb_detail(self, event: AstrMessageEvent, url: str = ""):
         """解析指定美图吧套图链接（/套图详情 <URL>）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -83,6 +85,7 @@ class MtbFeature(spFeature):
     @filter.command("更新套图列表", priority=25)
     async def sp_mtb_incremental_update(self, event: AstrMessageEvent):
         """增量更新套图列表（仅主人可用）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -121,6 +124,7 @@ class MtbFeature(spFeature):
     @filter.command("全量更新套图列表", priority=25)
     async def sp_mtb_full_update(self, event: AstrMessageEvent):
         """全量更新套图列表（仅主人可用）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 

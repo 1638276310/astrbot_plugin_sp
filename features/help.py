@@ -128,19 +128,15 @@ class HelpFeature(spFeature):
         "涩批文字帮助",
         alias={
             "sp文字帮助",
-            "涩批图片帮助",
-            "sp图片帮助",
             "色批文字帮助",
-            "色批图片帮助",
             "色胚文字帮助",
-            "色胚图片帮助",
             "涩胚文字帮助",
-            "涩胚图片帮助",
         },
         priority=50,
     )
     async def sp_help(self, event: AstrMessageEvent):
         """涩批插件帮助（文字版 / 图片版）"""
+        self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
@@ -150,6 +146,24 @@ class HelpFeature(spFeature):
                 yield result
             return
         yield event.plain_result(build_help_text())
+
+    @filter.command(
+        "涩批图片帮助",
+        alias={
+            "sp图片帮助",
+            "色批图片帮助",
+            "色胚图片帮助",
+            "涩胚图片帮助",
+        },
+        priority=50,
+    )
+    async def sp_help_image(self, event: AstrMessageEvent):
+        """涩批插件帮助（图片版）"""
+        self.stop_event_if_needed(event)
+        if not await self.guard(event):
+            return
+        async for result in self._send_help_image(event):
+            yield result
 
     async def _send_help_image(self, event: AstrMessageEvent):
         """优先发送插件自带帮助图，缺失时用 HTML 渲染。"""
