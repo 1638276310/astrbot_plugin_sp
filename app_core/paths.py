@@ -25,14 +25,16 @@ PLUGIN_NAME = "astrbot_plugin_sp"
 
 
 class PluginPaths:
-    """负责解析并创建插件所需的全部目录。"""
+    """负责解析并创建插件所需的全部目录。
+
+    数据目录统一通过 ``StarTools.get_data_dir(plugin_name)`` 获取
+    （AstrBot 官方规范路径，与 get_px 等成熟插件一致），
+    不再依赖 ``context.get_data_dir()``。
+    """
 
     def __init__(self, context=None, plugin_name: str = PLUGIN_NAME) -> None:
         self.plugin_name = plugin_name or PLUGIN_NAME
-        if context and hasattr(context, "get_data_dir"):
-            self.root = Path(context.get_data_dir())
-        else:
-            self.root = self._resolve_root() / self.plugin_name
+        self.root = self._resolve_root()
         self.temp = self.root / "temp"
         self.cache = self.root / "cache"
         self.assets = Path(__file__).resolve().parent.parent / "assets"
@@ -42,6 +44,13 @@ class PluginPaths:
     # 目录解析
     # ------------------------------------------------------------------ #
     def _resolve_root(self) -> Path:
+        # 首选：AstrBot 官方 StarTools（get_px 同款路径，插件数据规范位置）
+        try:
+            from astrbot.core.star.star_tools import StarTools  # type: ignore
+
+            return Path(StarTools.get_data_dir(self.plugin_name))
+        except Exception:  # pragma: no cover - 兼容极旧版本
+            pass
         if get_astrbot_plugin_data_path is not None:
             try:
                 return Path(get_astrbot_plugin_data_path())
@@ -55,7 +64,7 @@ class PluginPaths:
         # 兜底：AstrBot 根目录下的 data/plugin_data
         env_root = os.environ.get("ASTRBOT_ROOT")
         base = Path(env_root) if env_root else Path(os.getcwd())
-        return base / "data" / "plugin_data"
+        return base / "data" / "plugin_data" / self.plugin_name
 
     def _ensure(self) -> None:
         for path in (self.root, self.temp, self.cache):

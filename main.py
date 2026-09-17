@@ -23,8 +23,11 @@ AstrBot 只要求插件类所在的文件名为 ``main.py``。
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from astrbot.api import logger # type: ignore
 from astrbot.api.star import Context, Star, register # type: ignore
+from astrbot.core.star.star_tools import StarTools # type: ignore
 
 from .features import (
     CosImageFeature,
@@ -77,7 +80,7 @@ class spPlugin(
         super().__init__(context, config)
         # 注入运行时依赖：配置 + 数据目录
         self.settings = build_settings(config)
-        self.paths = PluginPaths(context)
+        self.paths = PluginPaths(context, plugin_name=PLUGIN_NAME)
         self.setup_feature(self.settings, self.paths)
         self._subscribe_store = JsonStore(self.paths.subscribe_file, {})
         self.scheduler: TimeBasedScheduler | None = None
@@ -89,7 +92,15 @@ class spPlugin(
     # 生命周期
     # ------------------------------------------------------------------ #
     async def initialize(self) -> None:
-        """插件被激活时启动内置定时任务。"""
+        """插件被激活时启动内置定时任务。
+
+        与 get_px 保持同构：数据目录统一通过 StarTools.get_data_dir
+        获取（AstrBot 官方规范路径），不再依赖 context.get_data_dir()。
+        """
+        data_dir = StarTools.get_data_dir(PLUGIN_NAME)
+        self.paths.root = Path(data_dir)
+        self.paths._ensure()
+
         cleaned = self.paths.cleanup_temp(3600)
         if cleaned:
             logger.info(f"[涩批] 已清理 {cleaned} 个过期临时文件")
