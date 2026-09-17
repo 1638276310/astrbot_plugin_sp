@@ -10,6 +10,8 @@ import asyncio
 import random
 from typing import TYPE_CHECKING
 
+from astrbot.api import logger # type: ignore
+
 from ..app_core.filecache import FileCache
 from ..app_core.imaging import add_noise, save_bytes
 from ..app_core.message import AdminMixin, MessageMixin
@@ -54,7 +56,14 @@ class spFeature(MessageMixin, AdminMixin):
         默认的 LLM / 聊天回复接管。get_px 等插件的所有指令 handler 都
         在入口处调用 ``event.stop_event()``，本插件的 Mixin 指令统一
         通过这个入口做同样的事，保证指令被自己消费、不会"漏"给 LLM。
+
+        同时打印一行命中日志，便于在服务器日志里确认指令是否被
+        本插件接住（28 个 handler 全部经过此入口）。
         """
+        try:
+            logger.info(f"[涩批] 命中指令：{event.get_message_str()!r}")
+        except Exception:
+            pass
         try:
             event.stop_event()
         except Exception:
