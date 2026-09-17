@@ -122,48 +122,7 @@ def help_groups() -> list[dict]:
 
 
 class HelpFeature(spFeature):
-    """帮助相关指令。"""
-
-    @filter.command(
-        "涩批文字帮助",
-        alias={
-            "sp文字帮助",
-            "色批文字帮助",
-            "色胚文字帮助",
-            "涩胚文字帮助",
-        },
-        priority=50,
-    )
-    async def sp_help(self, event: AstrMessageEvent):
-        """涩批插件帮助（文字版 / 图片版）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        message = event.get_message_str().strip()
-        if "图片" in message:
-            async for result in self._send_help_image(event):
-                yield result
-            return
-        yield event.plain_result(build_help_text())
-
-    @filter.command(
-        "涩批图片帮助",
-        alias={
-            "sp图片帮助",
-            "色批图片帮助",
-            "色胚图片帮助",
-            "涩胚图片帮助",
-        },
-        priority=50,
-    )
-    async def sp_help_image(self, event: AstrMessageEvent):
-        """涩批插件帮助（图片版）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-        async for result in self._send_help_image(event):
-            yield result
+    """帮助相关业务方法（指令 handler 由主类 main.py 注册）。"""
 
     async def _send_help_image(self, event: AstrMessageEvent):
         """优先发送插件自带帮助图，缺失时用 HTML 渲染。"""

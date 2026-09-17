@@ -6,6 +6,9 @@
 * ``/套图详情 <URL>``    —— 解析指定套图（URL 用空格分隔）
 * ``/更新套图列表``      —— 增量采集（列表为空时自动转全量，仅主人可用）
 * ``/全量更新套图列表``  —— 全量采集（仅主人可用）
+
+指令 handler 由主类 main.py 注册（与 get_px 同构），
+本文件保留业务方法。
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ DETAIL_URL_PATTERN = re.compile(r"套图详情\s+(https?://\S+)")
 
 
 class MtbFeature(spFeature):
-    """美图吧相关指令。"""
+    """美图吧相关业务方法（指令 handler 由主类 main.py 注册）。"""
 
     def album_urls(self) -> list[str]:
         data = load_json(self.paths.jg_urls_file, [])
@@ -34,104 +37,6 @@ class MtbFeature(spFeature):
 
     def save_album_urls(self, urls: list[str]) -> None:
         save_json(self.paths.jg_urls_file, urls)
-
-    # ------------------------------------------------------------------ #
-    # /随机美图吧
-    # ------------------------------------------------------------------ #
-    @filter.command("随机美图吧", priority=25)
-    async def sp_mtb_random(self, event: AstrMessageEvent):
-        """随机解析一套美图吧套图（/随机美图吧）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        urls = self.album_urls()
-        if not urls:
-            yield event.plain_result("套图URL列表为空，请先使用 /更新套图列表")
-            return
-        url = random.choice(urls)
-        yield event.plain_result("正在随机抽取一套美图，请稍等...")
-        async for result in self._send_album(event, url):
-            yield result
-
-    # ------------------------------------------------------------------ #
-    # /套图详情 <URL>
-    # ------------------------------------------------------------------ #
-    @filter.command("套图详情", priority=25)
-    async def sp_mtb_detail(self, event: AstrMessageEvent, url: str = ""):
-        """解析指定美图吧套图链接（/套图详情 <URL>）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        # 优先用空格传参（/套图详情 https://...），否则连写解析
-        if not url:
-            m = DETAIL_URL_PATTERN.search(event.get_message_str())
-            url = m.group(1) if m else ""
-        if not url.startswith("http"):
-            yield event.plain_result("用法：/套图详情 <URL>")
-            return
-        parsed = parse_detail_url(url)
-        if not parsed:
-            yield event.plain_result("URL 格式不正确")
-            return
-        yield event.plain_result("正在解析套图，请稍等...")
-        async for result in self._send_album(event, parsed):
-            yield result
-
-    # ------------------------------------------------------------------ #
-    # /更新套图列表
-    # ------------------------------------------------------------------ #
-    @filter.command("更新套图列表", priority=25)
-    async def sp_mtb_incremental_update(self, event: AstrMessageEvent):
-        """增量更新套图列表（仅主人可用）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        if not await self.require_admin(event):
-            return
-        existing = self.album_urls()
-        if not existing:
-            yield event.plain_result("套图URL列表为空，自动转为全量更新...")
-            async for result in self._full_update(event):
-                yield result
-            return
-
-        yield event.plain_result("开始增量更新套图URL列表（只采集最新页面）...")
-        try:
-            merged, total_pages = await collect_album_urls(
-                self.settings, existing=existing, incremental=True
-            )
-        except Exception as exc:
-            yield event.plain_result(f"增量更新失败: {exc}")
-            return
-
-        if total_pages is None:
-            yield event.plain_result("无法获取总页数，增量更新终止")
-            return
-
-        added = len(merged) - len(existing)
-        self.save_album_urls(merged)
-        yield event.plain_result(
-            f"增量更新完成！本次新增 {max(0, added)} 个套图"
-            f"（现有总计 {len(merged)} 个，原为 {len(existing)} 个）"
-        )
-
-    # ------------------------------------------------------------------ #
-    # /全量更新套图列表
-    # ------------------------------------------------------------------ #
-    @filter.command("全量更新套图列表", priority=25)
-    async def sp_mtb_full_update(self, event: AstrMessageEvent):
-        """全量更新套图列表（仅主人可用）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        if not await self.require_admin(event):
-            return
-        async for result in self._full_update(event):
-            yield result
 
     # ------------------------------------------------------------------ #
     # 内部实现

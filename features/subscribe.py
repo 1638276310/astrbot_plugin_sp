@@ -8,6 +8,9 @@
 
 原插件用群号作为 key（Yunzai 只能在群里用），AstrBot 版同时支持群聊与私聊，
 key 为群号或私聊用户 ID。
+
+指令 handler 由主类 main.py 注册（与 get_px 同构），
+本文件保留解析正则与存储 / 推送逻辑。
 """
 
 from __future__ import annotations
@@ -17,7 +20,6 @@ import random
 import re
 from typing import Any
 
-from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 from astrbot.api import logger  # 使用 astrbot 提供的 logger 接口 # type: ignore
 
 from ._base import spFeature
@@ -36,7 +38,7 @@ def empty_session() -> dict[str, Any]:
 
 
 class SubscribeFeature(spFeature):
-    """订阅相关指令与推送逻辑。"""
+    """订阅相关存储与推送逻辑（指令 handler 由主类 main.py 注册）。"""
 
     # ------------------------------------------------------------------ #
     # 存储
@@ -54,160 +56,6 @@ class SubscribeFeature(spFeature):
 
     def save_data(self, data: dict[str, Any]) -> None:
         self.store().set(data, persist=True)
-
-    # ------------------------------------------------------------------ #
-    # /订阅画师 <ID>
-    # ------------------------------------------------------------------ #
-    @filter.command("订阅画师", priority=20)
-    async def sp_subscribe(self, event: AstrMessageEvent, artist_id: str = ""):
-        """订阅画师更新（/订阅画师 <ID>）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        # 优先用空格传参（/订阅画师 12345），否则连写解析（/订阅画师12345）
-        if not artist_id:
-            m = SUBSCRIBE_PAT.search(event.get_message_str())
-            if not m:
-                yield event.plain_result("用法：/订阅画师 <画师ID>")
-                return
-            artist_id = m.group(1)
-
-        session = self.session_key(event)
-        data = self.load_data()
-
-        if (
-            self.settings.enable_group_limit
-            and session not in data
-            and len(data) >= self.settings.max_subscribe_sessions
-        ):
-            yield event.plain_result("已达到会话订阅上限！")
-            return
-
-        entry = data.setdefault(session, empty_session())
-        artists = entry.setdefault("artists", {})
-        if (
-            self.settings.enable_group_limit
-            and len(artists) >= self.settings.max_artists_per_session
-        ):
-            yield event.plain_result("该会话已达到画师订阅上限！")
-            return
-
-        if artist_id in artists:
-            yield event.plain_result(f"已经订阅了{artist_id}")
-            return
-
-        yield event.plain_result("正在检查画师ID，请稍等...")
-
-        artist = await self.pixiv.fetch_artist(artist_id)
-        if not artist or artist.get("error"):
-            yield event.plain_result("该画师id不存在")
-            return
-
-        artist_name = artist_id
-        body = artist.get("body")
-        if isinstance(body, dict):
-            pickup = body.get("pickup")
-            if isinstance(pickup, list) and pickup:
-                first = pickup[0]
-                if isinstance(first, dict) and first.get("userName"):
-                    artist_name = str(first["userName"])
-
-        artists[artist_id] = artist_name
-        entry["umo"] = event.unified_msg_origin
-        self.save_data(data)
-        yield event.plain_result(f"成功订阅画师{artist_id}（{artist_name}）")
-
-    # ------------------------------------------------------------------ #
-    # /取消订阅 <ID>
-    # ------------------------------------------------------------------ #
-    @filter.command("取消订阅", priority=20)
-    async def sp_unsubscribe(self, event: AstrMessageEvent, artist_id: str = ""):
-        """取消订阅画师（/取消订阅 <ID>）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        # 优先用空格传参（/取消订阅 12345），否则连写解析（/取消订阅12345）
-        if not artist_id:
-            m = UNSUBSCRIBE_PAT.search(event.get_message_str())
-            if not m:
-                yield event.plain_result("用法：/取消订阅 <画师ID>")
-                return
-            artist_id = m.group(1)
-        session = self.session_key(event)
-        data = self.load_data()
-        entry = data.get(session)
-        if not entry or artist_id not in (entry.get("artists") or {}):
-            yield event.plain_result(f"还未订阅{artist_id}哦")
-            return
-        entry["artists"].pop(artist_id, None)
-        self.save_data(data)
-        yield event.plain_result(f"成功取消订阅{artist_id}")
-
-    # ------------------------------------------------------------------ #
-    # /订阅列表
-    # ------------------------------------------------------------------ #
-    @filter.command("订阅列表", priority=20)
-    async def sp_subscribe_list(self, event: AstrMessageEvent):
-        """查看本会话已订阅的画师（/订阅列表）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        session = self.session_key(event)
-        data = self.load_data()
-        entry = data.get(session) or {}
-        artists = entry.get("artists") or {}
-        if not artists:
-            yield event.plain_result("当前没有订阅任何画师")
-            return
-        lines = ["订阅列表："]
-        for artist_id, artist_name in artists.items():
-            lines.append(f"{artist_name}  {artist_id}")
-        lines.append(f"推送状态：{'已开启' if entry.get('pushEnabled') else '已关闭'}")
-        yield event.plain_result("\n".join(lines))
-
-    # ------------------------------------------------------------------ #
-    # /sp推送 / /关闭sp推送
-    # ------------------------------------------------------------------ #
-    @filter.command("sp推送", priority=20)
-    async def sp_enable_push(self, event: AstrMessageEvent):
-        """开启画师更新推送（/sp推送）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        session = self.session_key(event)
-        data = self.load_data()
-        entry = data.setdefault(session, empty_session())
-        if entry.get("pushEnabled"):
-            yield event.plain_result("已经开启了sp推送。")
-            return
-        entry["pushEnabled"] = True
-        entry["umo"] = event.unified_msg_origin
-        self.save_data(data)
-        yield event.plain_result("已开启sp推送。")
-
-    @filter.command("关闭sp推送", priority=20)
-    async def sp_disable_push(self, event: AstrMessageEvent):
-        """关闭画师更新推送（/关闭sp推送）"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        session = self.session_key(event)
-        data = self.load_data()
-        entry = data.get(session)
-        if not entry:
-            yield event.plain_result("尚未开启sp推送，无需关闭。")
-            return
-        if not entry.get("pushEnabled"):
-            yield event.plain_result("尚未开启sp推送，无需关闭。")
-            return
-        entry["pushEnabled"] = False
-        self.save_data(data)
-        yield event.plain_result("已关闭sp推送。")
 
     # ------------------------------------------------------------------ #
     # 定时推送
@@ -297,8 +145,6 @@ class SubscribeFeature(spFeature):
     # 工具
     # ------------------------------------------------------------------ #
     async def _download_push_images(self, urls: list[str]) -> list[str]:
-        import random
-
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * len(urls)
 

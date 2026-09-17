@@ -3,23 +3,21 @@
 对应原 ``sj.js``：从持久化的视频直链列表里随机取一个，下载后发送。
 AstrBot 的 Video 组件可以直接吃网络 URL，但快手 CDN 需要 Referer，
 所以这里先下载到临时目录再用本地文件发送。
+
+指令 handler 由主类 main.py 注册（与 get_px 同构），
+本文件保留 Referer 常量与视频列表读写方法。
 """
 
 from __future__ import annotations
 
-import random
-
-from astrbot.api.event import AstrMessageEvent, filter # type: ignore
-
 from ._base import spFeature
-from ..app_core.http import fetch_bytes
 from ..app_core.storage import load_json, save_json
 
 REFERER = "https://www.kuaishou.com/"
 
 
 class VideoFeature(spFeature):
-    """随机短视频指令。"""
+    """随机短视频相关业务方法（指令 handler 由主类 main.py 注册）。"""
 
     def video_urls(self) -> list[str]:
         """读取骚鸡短视频直链列表。
@@ -45,38 +43,3 @@ class VideoFeature(spFeature):
     def save_video_urls(self, urls: list[str]) -> bool:
         """保存视频列表到持久化目录。"""
         return save_json(self.paths.video_urls_file, urls)
-
-    @filter.command("骚鸡", alias={"烧鸡", "sj"}, priority=20)
-    async def sp_random_video(self, event: AstrMessageEvent):
-        """随机发送一个涩批视频"""
-        self.stop_event_if_needed(event)
-        if not await self.guard(event):
-            return
-
-        urls = self.video_urls()
-        if not urls:
-            yield event.plain_result(
-                f"视频列表为空，请在数据目录 {self.paths.video_urls_file} 中补充视频直链。"
-            )
-            return
-
-        url = random.choice(urls)
-        target = self.temp_path("sp_video.mp4")
-        try:
-            data = await fetch_bytes(
-                url,
-                timeout=90,
-                referer=REFERER,
-                max_size=200 * 1024 * 1024,
-            )
-            target.write_bytes(data)
-        except Exception as exc:
-            yield event.plain_result(f"视频发送失败，请稍后再试（{exc}）")
-            return
-
-        try:
-            yield event.chain_result([self.video_component(target)])
-        except Exception:
-            yield event.plain_result("视频发送失败，请稍后再试")
-        finally:
-            self.safe_unlink(target)
