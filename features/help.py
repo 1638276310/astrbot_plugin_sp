@@ -14,9 +14,15 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
+from astrbot.api import logger # type: ignore
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
-from ..app_core.render import render_text_help_image
+from ..app_core.render import (
+    _find_chinese_font,
+    diagnose_font_missing,
+    ensure_chinese_font,
+    render_text_help_image,
+)
 from ..app_core.settings import PLUGIN_VERSION
 from ._base import spFeature
 
@@ -134,6 +140,9 @@ class HelpFeature(spFeature):
             return
 
         # 本地即时渲染（每次调用都是新图，不缓存，随文本内容自动更新）
+        # 先做一次字体体检：缺中文字体且 assets/fonts 里有自带字体时，
+        # 自动把字体安装到系统字体目录，再重试渲染一次（只重试一次，
+        # 避免无限循环）。
         try:
             out = self.temp_path(f"sp_help_{random.randint(1000, 9999)}.jpg")
             render_text_help_image(
@@ -142,23 +151,65 @@ class HelpFeature(spFeature):
                 version=PLUGIN_VERSION,
                 out_path=out,
             )
+            self._log_font_status()
             yield event.image_result(str(out))
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            # 渲染失败不再静默吞掉：记一条 warning 便于定位
+            # （常见根因：Pillow 未安装 / assets 目录不可写 / 字体加载异常）
+            logger.warning(f"[涩批] 本地渲染帮助图失败: {exc!r}")
+
+        # 失败后：先诊断是否字体缺失，缺失则尝试自动修复并重试一次
+        try:
+            font_diag = diagnose_font_missing()
+            if font_diag["missing"]:
+                logger.info(
+                    f"[涩批] 检测到中文字体缺失: {font_diag['suggestion']}"
+                )
+                fixed_diag = ensure_chinese_font()
+                if not fixed_diag["missing"]:
+                    logger.info(
+                        "[涩批] 字体自动安装成功，重试渲染帮助图"
+                    )
+                    out = self.temp_path(f"sp_help_{random.randint(1000, 9999)}.jpg")
+                    render_text_help_image(
+                        groups=help_groups(),
+                        author=AUTHOR,
+                        version=PLUGIN_VERSION,
+                        out_path=out,
+                    )
+                    yield event.image_result(str(out))
+                    return
+                logger.warning(
+                    f"[涩批] 字体自动安装后仍未找到可用字体: "
+                    f"{fixed_diag['suggestion']}"
+                )
+        except Exception as exc:
+            logger.warning(f"[涩批] 字体诊断/自动修复过程出错: {exc!r}")
 
         # 兜底：直接发文字版
         yield event.plain_result(
-            "未找到 assets/help.jpg，本地渲染也失败，已改为发送文字帮助：\n\n"
+            "未找到 assets/help.jpg，本地渲染也失败，已改为发送文字帮助"
+            "（详见服务器日志）：\n\n"
             + build_help_text()
         )
+
+    def _log_font_status(self) -> None:
+        """渲染成功后打印一次字体状态（缺失仅 warning，不阻断流程）。"""
+        font = _find_chinese_font()
+        if font is None:
+            logger.warning(
+                "[涩批] 帮助图已渲染，但未找到中文字体，"
+                "图中中文可能显示为方块，建议在 assets/fonts/ 放入 "
+                "思源黑体等 .ttf/.otf 文件"
+            )
+        else:
+            logger.info(f"[涩批] 帮助图渲染成功，使用中文字体: {font}")
 
     # ------------------------------------------------------------------ #
     # 诊断：查看当前本地渲染用了哪个字体（用于确认中文能否正常显示）
     # ------------------------------------------------------------------ #
     @staticmethod
     def _diagnose_font() -> str:
-        from ..app_core.render import _find_chinese_font
-
         p = _find_chinese_font()
         return str(p) if p else "builtin (Pillow 默认字体，无法显示中文)"

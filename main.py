@@ -669,9 +669,12 @@ class spPlugin(
         async for result in self._send_mzt_album(event, article_id):
             yield result
 
-    @filter.command("随机写真", priority=20)
+    @filter.command("随机写真", priority=25)
     async def sp_mzt_random(self, event: AstrMessageEvent):
-        """随机获取妹子图（/随机写真）"""
+        """随机获取妹子图（/随机写真）。
+        优先级高于 "随机"（priority=20），消除两个指令的前缀冲突：
+        AstrBot 对前缀匹配时，优先级高的 handler 先命中。
+        """
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 from pathlib import Path
 from typing import Iterable
 
@@ -46,10 +47,15 @@ ACCENT = (47, 134, 189)
 ACCENT_DARK = (24, 92, 145)
 HEADING_RULE = (224, 227, 231)
 
+# 插件自带字体目录（assets/fonts，随插件 zip 一起分发；
+# 用户往这里丢一个中文字体文件即可，渲染时自动优先命中，
+# 若系统缺字体还会自动尝试把它安装到系统字体目录）
+_ASSET_FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
+
 # 常见中文字体候选（按平台与常见安装位置），找不到就用 Pillow 默认字体
 _FONT_CANDIDATES: list[str] = [
     # 插件自带字体目录（优先级最高，便于把思源黑体等放进去）
-    os.path.join(os.path.dirname(__file__), "..", "assets", "fonts"),
+    _ASSET_FONTS_DIR,
     # 系统字体目录
     "/usr/share/fonts",
     "/usr/share/fonts/noto-cjk",
@@ -415,3 +421,146 @@ def find_asset_fonts() -> list[Path]:
         if f.suffix.lower() in {".ttf", ".ttc", ".otf"} and f.is_file():
             out.append(f)
     return out
+
+
+# ---------------------------------------------------------------------- #
+# 字体缺失诊断与自动修复
+# ---------------------------------------------------------------------- #
+
+# 各平台把"插件自带字体"安装到系统字体目录的目标位置（按优先级排列）
+_SYSTEM_FONT_INSTALL_DIRS: list[str] = [
+    # Linux: 用户级字体目录（无需 root，fc-cache 自动刷新）
+    os.path.expanduser("~/.local/share/fonts"),
+    # Linux: 系统级（需要写权限，通常是 root 部署 AstrBot 时才有效）
+    "/usr/local/share/fonts",
+    "/usr/share/fonts",
+    # Windows: 系统字体目录（一般可写；若不可写则跳过）
+    "C:/Windows/Fonts",
+]
+
+
+def diagnose_font_missing() -> dict:
+    """诊断当前环境中中文字体是否缺失，返回诊断结果 dict。
+
+    返回结构::
+
+        {
+            "missing": True,            # 是否缺失中文字体（走 Pillow 兜底则 True）
+            "asset_fonts": [..],        # assets/fonts 下可用的字体文件
+            "system_font_found": None, # 系统里已找到的字体路径（找不到为 None）
+            "install_dir": None,       # 推荐安装目录
+            "suggestion": "…",         # 给人看的修复建议
+        }
+    """
+    asset_fonts = find_asset_fonts()
+    system_font = _find_chinese_font()
+
+    # 系统里找到了字体（含 assets/fonts），不存在缺失
+    if system_font is not None:
+        return {
+            "missing": False,
+            "asset_fonts": asset_fonts,
+            "system_font_found": str(system_font),
+            "install_dir": None,
+            "suggestion": "字体正常：使用中文字体 "
+                          f"{system_font}，无需处理。",
+        }
+
+    missing: dict = {
+        "missing": True,
+        "asset_fonts": asset_fonts,
+        "system_font_found": None,
+        "install_dir": _first_writable_install_dir(),
+    }
+    if asset_fonts:
+        missing["suggestion"] = (
+            f"系统缺中文字体，但插件 assets/fonts 下已有 {len(asset_fonts)} 个字体文件"
+            f"（{asset_fonts[0].name} 等），可直接渲染；"
+            "如需永久生效，可将它们安装到系统字体目录。"
+        )
+    else:
+        missing["suggestion"] = (
+            "系统缺中文字体，且插件 assets/fonts 目录为空。"
+            "请往 assets/fonts/ 放一个中文字体文件（如 SimHei.ttf / "
+            "SourceHanSansSC-Regular.otf / wqy-microhei.ttc），"
+            "或手动安装系统字体："
+            "Linux: sudo apt install fonts-wqy-microhei；"
+            "Windows: 系统自带 SimHei.ttf，确认 C:/Windows/Fonts 可访问。"
+        )
+    return missing
+
+
+def ensure_chinese_font() -> dict:
+    """确保中文字体可用：系统缺字体时，自动把 assets/fonts 下的字体
+    拷贝到系统字体目录，然后清空字体缓存重新探测。
+
+    与 ``diagnose_font_missing`` 的区别：这个函数**会动手修**，
+    修完立即让后续 ``get_font`` 命中新装好的字体。
+    返回诊断结果 dict（同 ``diagnose_font_missing`` 的结构）。
+    """
+    diag = diagnose_font_missing()
+    if not diag["missing"]:
+        return diag
+
+    if not diag["asset_fonts"]:
+        return diag  # 没有自带字体可装，只能给建议
+
+    install_dir = diag["install_dir"]
+    if not install_dir:
+        return diag
+
+    copied: list[Path] = []
+    for font_file in diag["asset_fonts"]:
+        target = Path(install_dir) / font_file.name
+        try:
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(font_file, target)
+            copied.append(target)
+        except OSError:
+            continue
+
+    if copied:
+        # 让 Linux 的 fontconfig 立即感知新字体（不依赖重启动）
+        _run_font_cache_refresh()
+        # 清掉 render.py 内部的字体缓存，强制重新探测（含刚装的系统字体）
+        _font_cache.clear()
+        _fallback_sizes.clear()
+        diag["system_font_found"] = str(_find_chinese_font())
+        diag["missing"] = _find_chinese_font() is None
+        diag["suggestion"] = (
+            f"已自动把 {len(copied)} 个字体文件安装到 {install_dir}："
+            f"{', '.join(str(p) for p in copied)}。"
+            + ("" if not diag["missing"] else " 但仍未探测到可用字体，请手动检查。")
+        )
+    return diag
+
+
+def _first_writable_install_dir() -> str | None:
+    """按优先级找到第一个**可写**的系统字体安装目录。"""
+    for d in _SYSTEM_FONT_INSTALL_DIRS:
+        try:
+            p = Path(d)
+            p.mkdir(parents=True, exist_ok=True)
+            probe = p / "._astrbot_sp_font_probe"
+            probe.write_text("probe")
+            probe.unlink()
+            return d
+        except (OSError, PermissionError):
+            continue
+    return None
+
+
+def _run_font_cache_refresh() -> None:
+    """触发 Linux 的 fc-cache 刷新（Windows 不需要，静默忽略失败）。"""
+    if os.name != "posix":
+        return
+    import subprocess
+    for cmd in (["fc-cache", "-fv"], ["fc-cache", "-f"]):
+        try:
+            subprocess.run(cmd, timeout=30, check=False,
+                           capture_output=True)
+            if cmd[1] == "-fv" or True:
+                break
+        except (OSError, subprocess.SubprocessError):
+            continue

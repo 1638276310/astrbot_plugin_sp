@@ -1,0 +1,19 @@
+把任意一个中文字体文件放进本目录（文件名随意），插件渲染帮助图 / 签到卡片等
+本地图片时会自动优先使用这里的字体，彻底解决 Linux 服务器上没有中文字体
+导致"图中中文变方块"或渲染失败的问题。
+
+支持的文件格式（任一即可，放一个就够）：
+- SimHei.ttf          （Windows 系统自带，C:/Windows/Fonts/SimHei.ttf 直接复制过来）
+- msyh.ttc           （Windows 微软雅黑，C:/Windows/Fonts/msyh.ttc）
+- SourceHanSansSC-Regular.otf  （思源黑体，免费可商用，推荐）
+- NotoSansCJK-Regular.ttc     （Noto CJK，Linux 常见）
+- wqy-microhei.ttc  （文泉驿微米黑，Linux 常见，体积最小）
+
+推荐体积控制在 10MB 以内（思源黑体 SC 单字重约 8-10MB），避免撑大插件
+安装包（AstrBot 插件市场 zip 上限 16MB）。
+
+放好后：
+1. 重新打包 / 重载插件即可；
+2. 若系统本身缺字体，插件还会自动把本目录里的字体拷贝到系统字体目录
+   （Linux 优先 ~/.local/share/fonts，需要 fc-cache 刷新；Windows 拷到
+   C:/Windows/Fonts），一次安装长期有效。
