@@ -229,10 +229,20 @@ def _render_groups(
     # 每个 block 固定两个 key：
     #   "title_lines": list[str]
     #   "items":       list[tuple[str, str, bool]]
-    # （dict 的 value 类型保持并集即可；下面的 BlockTitleLines 别名只在
-    # 需要单独收紧某个 key 的类型时使用，用于消除类型检查器的误报。）
-    BlockTitleLines = list[str]
-    blocks: list[dict[str, BlockTitleLines | list[tuple[str, str, bool]]]] = []
+    #
+    # 注意：dict 的 value 类型这里**故意**写成裸 list（不参数化），
+    # 原因：
+    # 1. 若写成 list[str] | list[tuple[str, str, bool]]，draw 循环里
+    #    对 blk["title_lines"] 的下标访问会被 Pylance 推导出并集类型，
+    #    需要额外断言来收窄；
+    # 2. 过去曾用 assert isinstance(x, BlockTitleLines)（其中
+    #    BlockTitleLines = list[str]）来收窄，但 Python < 3.10 下
+    #    isinstance 不接受参数化泛型，运行时会抛
+    #    TypeError('isinstance() argument 2 cannot be a parameterized
+    #    generic')，导致帮助图渲染直接失败（见 v4.28.1 日志）。
+    # 3. 因此统一用裸 list 标注 + draw 循环里局部变量重标注（first_title:
+    #    str = ...）的方式，对 Pylance 友好且不引入版本敏感的语法。
+    blocks: list[dict[str, list]] = []
     # 计算"· "在该字号下的真实像素宽度，续行用等宽空格对齐
     bullet_px = _text_width(draw_probe, "· ", f_item)
     # 说明行（note）前缀：比指令行多退一级（两个全角空格 ≈ 2 个字符宽）
@@ -322,8 +332,10 @@ def _render_groups(
             # 标题下的短横线
             if real:
                 assert draw is not None
-                assert isinstance(blk["title_lines"], BlockTitleLines)  # 收紧类型
-                first_title = blk["title_lines"][0] if blk["title_lines"] else ""
+                # 取分组标题首行（title_lines 构造时就是 list[str]，此处
+                # 用局部变量显式标注为 str，Pylance 可正确收窄；
+                # 兼容 Python 3.8+，不使用参数化泛型 isinstance）。
+                first_title: str = blk["title_lines"][0] if blk["title_lines"] else ""
                 rule_w = min(60, _text_width(draw, first_title, f_group))
                 draw.line((LEFT_PAD, y, LEFT_PAD + rule_w, y),
                           fill=HEADING_RULE, width=2)
