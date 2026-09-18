@@ -25,27 +25,56 @@ from PIL import Image as PILImage, ImageDraw, ImageFont # type: ignore[import]
 from .imaging import save_bytes
 
 # ---------------------------------------------------------------------- #
-# 布局与配色（与原 HTML 版 HELP_TEMPLATE 保持一致的观感）
+# 布局与配色（卡片式风格：浅灰底 + 白色圆角卡片 + 彩色标题栏）
 # ---------------------------------------------------------------------- #
 
 PAGE_WIDTH = 760
-LEFT_PAD = 36
-RIGHT_PAD = 36
-TOP_PAD = 36
-BOTTOM_PAD = 44
-GROUP_SPACING = 22
-HEADING_SIZE = 34
-TITLE_SIZE = 42
+MARGIN = 28            # 页面左右外边距
+CARD_MARGIN_X = MARGIN # 卡片与页面边缘的水平间距
+TOP_PAD = 30
+BOTTOM_PAD = 34
+CARD_SPACING = 22      # 卡片之间间距
+CARD_RADIUS = 14       # 卡片圆角
+CARD_PAD_X = 22        # 卡片内部左右边距
+CARD_PAD_TOP = 14      # 卡片标题栏与卡片顶部
+CARD_PAD_BOTTOM = 16   # 卡片内容与卡片底部
+HEADBAR_H = 48         # 彩色标题栏高度
+GROUP_SPACING = 14     # 卡片内 标题栏 -> 条目 间距
+HEADING_SIZE = 30      # 分组标题（标题栏内白字）
+TITLE_SIZE = 40        # 顶部主标题
 SUBTITLE_SIZE = 20
-ITEM_SIZE = 22
-LINE_HEIGHT_FACTOR = 1.35
+ITEM_SIZE = 21
+NOTE_SIZE = 18
+LINE_HEIGHT_FACTOR = 1.42
 
-BG = (253, 253, 250)
-FG = (32, 34, 36)
-MUTED = (102, 107, 112)
-ACCENT = (47, 134, 189)
-ACCENT_DARK = (24, 92, 145)
-HEADING_RULE = (224, 227, 231)
+# 背景与卡片
+BG_TOP = (236, 240, 248)     # 背景上（浅蓝灰）
+BG_BOTTOM = (224, 228, 238)  # 背景下（略深，形成渐变）
+CARD_BG = (255, 255, 255)    # 卡片白
+CARD_BORDER = (226, 230, 238)
+CARD_SHADOW = (180, 190, 205)
+
+FG = (32, 34, 40)            # 正文
+MUTED = (122, 128, 140)      # 说明/副文字
+BORDER_LINE = (228, 231, 238)
+
+# 顶部横幅
+HERO_FROM = (47, 134, 189)
+HERO_TO = (72, 60, 140)
+HERO_FG = (255, 255, 255)
+HERO_MUTED = (222, 232, 245)
+
+# 每个分组的主题色（循环使用）：标题栏底色 + 圆点色
+_GROUP_THEMES: list[tuple[tuple[int, int, int], tuple[int, int, int]]] = [
+    ((47, 134, 189), (24, 92, 145)),    # 蓝
+    ((146, 84, 146), (110, 54, 110)),   # 紫
+    ((38, 150, 94), (26, 110, 70)),      # 绿
+    ((220, 120, 40), (170, 88, 24)),     # 橙
+    ((196, 58, 84), (150, 40, 62)),      # 红
+    ((30, 140, 150), (20, 100, 110)),    # 青
+    ((120, 96, 60), (90, 70, 44)),       # 棕
+    ((90, 96, 110), (66, 70, 82)),       # 灰蓝
+]
 
 # 插件自带字体目录（assets/fonts，随插件 zip 一起分发；
 # 用户往这里丢一个中文字体文件即可，渲染时自动优先命中，
@@ -202,179 +231,312 @@ def _make_space_prefix(target_px: int, font, draw: ImageDraw.ImageDraw) -> str:
     return " " * n
 
 
+# ---------------------------------------------------------------------- #
+# 辅助绘制
+# ---------------------------------------------------------------------- #
+
+def _draw_rounded_rect(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+                       radius: int, fill=None, outline=None, width: int = 1) -> None:
+    """画圆角矩形（兼容 Pillow 各版本：优先 rounded_rectangle，退回四角圆+矩形拼接）。"""
+    x0, y0, x1, y1 = box
+    try:
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius,
+                               fill=fill, outline=outline, width=width)
+        return
+    except Exception:
+        pass
+    # 退回方案：四角画扇形圆 + 中间矩形（老版 Pillow 没有 rounded_rectangle）
+    if fill is not None:
+        r = radius
+        draw.rectangle((x0 + r, y0, x1 - r, y1), fill=fill)
+        draw.rectangle((x0, y0 + r, x1, y1 - r), fill=fill)
+        draw.pieslice((x0, y0, x0 + 2 * r, y0 + 2 * r), 180, 270, fill=fill)
+        draw.pieslice((x1 - 2 * r, y0, x1, y0 + 2 * r), 270, 360, fill=fill)
+        draw.pieslice((x0, y1 - 2 * r, x0 + 2 * r, y1), 90, 180, fill=fill)
+        draw.pieslice((x1 - 2 * r, y1 - 2 * r, x1, y1), 0, 90, fill=fill)
+    if outline is not None:
+        r = radius
+        draw.arc((x0, y0, x0 + 2 * r, y0 + 2 * r), 180, 270, fill=outline, width=width)
+        draw.arc((x1 - 2 * r, y0, x1, y0 + 2 * r), 270, 360, fill=outline, width=width)
+        draw.arc((x0, y1 - 2 * r, x0 + 2 * r, y1), 90, 180, fill=outline, width=width)
+        draw.arc((x1 - 2 * r, y1 - 2 * r, x1, y1), 0, 90, fill=outline, width=width)
+        draw.line((x0 + r, y0, x1 - r, y0), fill=outline, width=width)
+        draw.line((x0 + r, y1, x1 - r, y1), fill=outline, width=width)
+        draw.line((x0, y0 + r, x0, y1 - r), fill=outline, width=width)
+        draw.line((x1, y0 + r, x1, y1 - r), fill=outline, width=width)
+
+
+def _draw_soft_shadow(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+                      radius: int, offset: int = 3,
+                      color: tuple[int, int, int] = CARD_SHADOW) -> None:
+    """在 box 位置画一层柔和阴影（多层半透明偏移，模拟扩散效果）。
+
+    直接用纯色叠层（JPEG 保存会把 alpha 压平，用 3 层同色不同透明度模拟）。
+    """
+    x0, y0, x1, y1 = box
+    for i, op in enumerate((26, 44, 70)):  # 由浅到深三层
+        off = offset + i * 2
+        # 把阴影色与背景色按 op/100 混合
+        bgc = CARD_BG
+        mix = tuple(int(b * op / 100 + c * (100 - op) / 100)
+                    for b, c in zip(color, bgc))  # type: ignore[operator]
+        _draw_rounded_rect(
+            draw,
+            (x0 - 2 + off, y0 - 2 + off, x1 - 2 + off, y1 - 2 + off),
+            radius=radius + 2,
+            fill=mix,
+        )
+
+
+def _vgrad(color_a: tuple[int, int, int], color_b: tuple[int, int, int],
+           h: int) -> list[tuple[int, int, int]]:
+    """生成 h 行的纵向渐变色。"""
+    out: list[tuple[int, int, int]] = []
+    for i in range(h):
+        t = i / max(1, h - 1)
+        out.append(tuple(int(a + (b - a) * t) for a, b in zip(color_a, color_b)))  # type: ignore[arg-type]
+    return out
+
+
+def _hgrad(color_a: tuple[int, int, int], color_b: tuple[int, int, int],
+           w: int) -> list[tuple[int, int, int]]:
+    """生成 w 列的横向渐变色。"""
+    out: list[tuple[int, int, int]] = []
+    for i in range(w):
+        t = i / max(1, w - 1)
+        out.append(tuple(int(a + (b - a) * t) for a, b in zip(color_a, color_b)))  # type: ignore[arg-type]
+    return out
+
+
+def _draw_horizontal_gradient(draw: ImageDraw.ImageDraw, x0: int, y0: int, x1: int, y1: int,
+                              color_a: tuple[int, int, int], color_b: tuple[int, int, int]) -> None:
+    """把 (x0,y0)-(x1,y1) 区域填成横向渐变。"""
+    cols = _hgrad(color_a, color_b, x1 - x0 + 1)
+    for i, c in enumerate(cols):
+        draw.line((x0 + i, y0, x0 + i, y1), fill=c)
+
+
+# ---------------------------------------------------------------------- #
+# 主渲染
+# ---------------------------------------------------------------------- #
+
 def _render_groups(
     groups: Iterable[dict],
     author: str,
     version: str,
 ) -> tuple[PILImage.Image, dict]:
-    """把结构化帮助内容渲染成一张 JPEG 长图。
+    """把结构化帮助内容渲染成一张卡片风格 JPEG 长图。
 
-    返回 ``(image, meta)``；meta 含实际使用的字体文件路径与渲染尺寸。
+    设计：浅灰渐变背景 + 顶部彩色横幅（主标题/副标题/版本徽标）+
+    每分组一张白色圆角卡片（彩色标题栏 + 圆点条目 + 指令名高亮）+
+    底部作者署名。返回 ``(image, meta)``；meta 含实际使用的字体文件
+    路径与渲染尺寸。
     """
-    draw_probe = ImageDraw.Draw(PILImage.new("RGB", (PAGE_WIDTH, 10)))
+    # 字体
     f_title = get_font(TITLE_SIZE, bold=True)
     f_subtitle = get_font(SUBTITLE_SIZE)
+    f_badge = get_font(16, bold=True)
     f_group = get_font(HEADING_SIZE, bold=True)
     f_item = get_font(ITEM_SIZE)
+    f_item_bold = get_font(ITEM_SIZE, bold=True)
+    f_note = get_font(NOTE_SIZE)
 
-    # 预折行。每个分组渲染成一个 dict：
-    #   title_lines: list[str]  分组标题（已按版宽折行）
-    #   items:       list[str]  条目（已折行，首行已带上"· "前缀，续行已带上
-    #                            与"· "等像素宽的空格前缀 —— 量宽与画宽使用完全
-    #                            相同的字符串，符号列与文本列像素级对齐、不越界）
-    # 每个条目折行后渲染成一个元组：(text, prefix, is_note)
-    #   text:    该行的实际文字（不含前缀）
-    #   prefix:  该行文字前的前缀（"· " / 等宽空格 / 说明行的双空格）
-    #   is_note: True = 说明行（用浅灰渲染，退后一级），False = 指令行（正常黑字）
-    # 每个 block 固定两个 key：
-    #   "title_lines": list[str]
-    #   "items":       list[tuple[str, str, bool]]
-    #
-    # 注意：dict 的 value 类型这里**故意**写成裸 list（不参数化），
-    # 原因：
-    # 1. 若写成 list[str] | list[tuple[str, str, bool]]，draw 循环里
-    #    对 blk["title_lines"] 的下标访问会被 Pylance 推导出并集类型，
-    #    需要额外断言来收窄；
-    # 2. 过去曾用 assert isinstance(x, BlockTitleLines)（其中
-    #    BlockTitleLines = list[str]）来收窄，但 Python < 3.10 下
-    #    isinstance 不接受参数化泛型，运行时会抛
-    #    TypeError('isinstance() argument 2 cannot be a parameterized
-    #    generic')，导致帮助图渲染直接失败（见 v4.28.1 日志）。
-    # 3. 因此统一用裸 list 标注 + draw 循环里局部变量重标注（first_title:
-    #    str = ...）的方式，对 Pylance 友好且不引入版本敏感的语法。
-    blocks: list[dict[str, list]] = []
-    # 计算"· "在该字号下的真实像素宽度，续行用等宽空格对齐
-    bullet_px = _text_width(draw_probe, "· ", f_item)
-    # 说明行（note）前缀：比指令行多退一级（两个全角空格 ≈ 2 个字符宽）
-    note_prefix = "\u3000\u3000"
-    note_prefix_px = _text_width(draw_probe, note_prefix, f_item)
-    # 折行预留宽度必须取"实际会被用到的最大前缀宽"（指令行的"· " 与
-    # 说明行的 note_prefix 两者取大），否则说明行会比指令行更靠右、
-    # 长行容易越出 RIGHT_PAD。
-    max_prefix_px = max(bullet_px, note_prefix_px)
-    item_wrap_w = PAGE_WIDTH - LEFT_PAD - RIGHT_PAD - max_prefix_px
-    # 指令行续行缩进前缀（与"· "等像素宽），整张图共用一个，算一次即可
-    cont_prefix = _make_space_prefix(bullet_px, f_item, draw_probe)
-    for group in groups:
-        title = group.get("title", "")
+    # 用于量宽的探针画布
+    probe = PILImage.new("RGB", (PAGE_WIDTH, 10), CARD_BG)
+    draw_probe = ImageDraw.Draw(probe)
+
+    # 行高
+    f_h = _line_h(f_title)
+    f_sh = _line_h(f_subtitle)
+    f_gh = _line_h(f_group)
+    f_ih = _line_h(f_item)
+    f_nh = _line_h(f_note)
+
+    # 卡片内文本可写宽度
+    card_w = PAGE_WIDTH - 2 * CARD_MARGIN_X
+    text_x0 = CARD_MARGIN_X + CARD_PAD_X
+    text_w = card_w - 2 * CARD_PAD_X
+
+    # 指令名（/xxx）高亮所需：条目行宽 = 圆点列 + 文本
+    dot_gap = 14           # 圆点与文本间距
+    dot_r = 5             # 圆点半径
+    bullet_col = dot_gap + dot_r * 2 + 4
+    item_wrap_w = text_w - bullet_col
+    # 说明行（note）与指令行"续行"对齐到同一列（bullet_col），
+    # 保证整块条目左右视觉整齐；note 不加圆点、字号更小、颜色更浅。
+    note_indent = bullet_col
+
+    blocks: list[dict] = []
+    for idx, group in enumerate(groups):
+        title = str(group.get("title", ""))
         items = group.get("items", [])
-        g_lines = wrap_text(title, f_group, PAGE_WIDTH - LEFT_PAD - RIGHT_PAD, draw_probe)
-        g_items: list[tuple[str, str, bool]] = []
+        theme = _GROUP_THEMES[idx % len(_GROUP_THEMES)]
+        # 标题栏内文字量宽（标题栏可用宽 = 卡片宽 - 左右 pad）
+        g_lines = wrap_text(title, f_group, text_w - 8, draw_probe)
+        # 条目：把每条拆成 (text, is_note, wrapped_lines, first_line_x_extra)
+        g_items: list[tuple[list[str], bool]] = []
         for item in items:
-            # item 可能是 dict（含 text/bullet 标记）或纯 str（旧格式兼容）
             if isinstance(item, dict):
                 item_text = str(item.get("text", ""))
                 bullet = bool(item.get("bullet", False))
             else:
                 item_text, bullet = str(item), False
             is_note = not bullet
-            prefix_first = ("· " if bullet else note_prefix)
-            prefix_cont = (cont_prefix if bullet else note_prefix)
-            item_lines = wrap_text(item_text, f_item, item_wrap_w, draw_probe)
-            for i, ln in enumerate(item_lines):
-                g_items.append((ln, prefix_first if i == 0 else prefix_cont, is_note))
+            wfont = f_note if is_note else f_item
+            wrapped = wrap_text(item_text, wfont, item_wrap_w, draw_probe)
+            g_items.append((wrapped, is_note))
         blocks.append({
+            "theme": theme,
             "title_lines": g_lines,
             "items": g_items,
         })
 
-    title_lines = wrap_text("涩批 AstrBot 插件 · 指令手册", f_title,
-                            PAGE_WIDTH - LEFT_PAD - RIGHT_PAD, draw_probe)
-    subtitle = f"AstrBot 版 · 作者：{author} · {version}"
+    # 顶部横幅内容
+    hero_title_lines = wrap_text("涩批 AstrBot 插件", f_title,
+                                 PAGE_WIDTH - 2 * CARD_MARGIN_X - 40, draw_probe)
+    hero_subtitle = f"指令手册 · {author}"
+
+    # 版本徽标尺寸（固定 30px 高，保证小字号下也够看）
+    badge_text = version
+    badge_w = _text_width(draw_probe, badge_text, f_badge) + 24
+    badge_h = 30
 
     # ------------------------------------------------------------------ #
-    # 高度计算与绘制共用同一套步进逻辑（先 dry-run 算高度，再实际绘制）。
-    # 这样"要占多高"和"y 实际走多少"永远一致，改间距时只改一处。
+    # 高度计算（先 dry-run 把总高算出来，再开画布实际绘制）
     # ------------------------------------------------------------------ #
-    f_h = _line_h(f_title)
-    f_sh = _line_h(f_subtitle)
-    f_gh = _line_h(f_group)
-    f_ih = _line_h(f_item)
-
-    def _layout_y(
-        start_y: int,
-        real: bool,
-        draw: ImageDraw.ImageDraw | None = None,
-    ) -> int:
-        """从 start_y 开始排布标题/副标题/各分组，返回画完后的 y。
-
-        - ``real=False``（必须不传 ``draw``）：只按步进累加高度、不写像素，
-          用于先算出图高；
-        - ``real=True``（必须传 ``draw``）：把文本/横线真正画到 ``draw`` 上。
-
-        显式传参而不是闭包引用外层 ``draw``，避免 dry-run 时外层变量
-        尚未赋值导致的 NameError 隐患。
-        """
-        if real and draw is None:
-            raise ValueError("real=True 必须传入 draw")
-        y = start_y
-        # 主标题（比分组标题更大，视觉分层）
-        for ln in title_lines:
-            if real:
-                assert draw is not None
-                draw.text((LEFT_PAD, y), ln, font=f_title, fill=FG)
-            y += f_h
-        y += 4
-        # 副标题
-        if real:
-            assert draw is not None
-            draw.text((LEFT_PAD, y), subtitle, font=f_subtitle, fill=MUTED)
-        y += f_sh + 18
-
-        for blk in blocks:
-            # 分组标题
-            for tl in blk["title_lines"]:
-                if real:
-                    assert draw is not None
-                    draw.text((LEFT_PAD, y), tl, font=f_group, fill=ACCENT_DARK)
-                y += f_gh
-            y += 4
-            # 标题下的短横线
-            if real:
-                assert draw is not None
-                # 取分组标题首行（title_lines 构造时就是 list[str]，此处
-                # 用局部变量显式标注为 str，Pylance 可正确收窄；
-                # 兼容 Python 3.8+，不使用参数化泛型 isinstance）。
-                first_title: str = blk["title_lines"][0] if blk["title_lines"] else ""
-                rule_w = min(60, _text_width(draw, first_title, f_group))
-                draw.line((LEFT_PAD, y, LEFT_PAD + rule_w, y),
-                          fill=HEADING_RULE, width=2)
-            y += 8
-            # 条目（每项是 (text, prefix, is_note) 元组）
-            for text, prefix, is_note in blk["items"]:
-                if real:
-                    assert draw is not None
-                    fill_color = MUTED if is_note else FG
-                    draw.text((LEFT_PAD, y), prefix + text, font=f_item, fill=fill_color)
-                y += f_ih
-            y += GROUP_SPACING
-        return y
-
-    # dry-run：只按步进累加高度（real=False 不写像素），算出正文实际占用高度
-    content_h = _layout_y(TOP_PAD, real=False) - TOP_PAD
-
-    # 正文后预留"底部签名线 + 署名"的高度，再加底边距
-    footer_gap = 18          # 正文 -> 签名线
-    footer_line_h = 1        # 签名线本身
-    footer_text_gap = 8      # 签名线 -> 署名字
-    footer_text_h = f_sh     # 署名一行
-    height = (TOP_PAD + content_h
-              + footer_gap + footer_line_h + footer_text_gap + footer_text_h
-              + BOTTOM_PAD)
+    hero_h = (TOP_PAD + f_h * len(hero_title_lines) + 8 + f_sh + 14)
+    card_heights: list[int] = []
+    for blk in blocks:
+        h = CARD_PAD_TOP + HEADBAR_H + GROUP_SPACING
+        for lines, is_note in blk["items"]:
+            if not lines:
+                continue
+            lh = f_nh if is_note else f_ih
+            h += len(lines) * lh + 6
+        h += CARD_PAD_BOTTOM
+        card_heights.append(h)
+    cards_h = sum(card_heights) + CARD_SPACING * (len(blocks) - 1)
+    footer_h = 18 + f_sh + BOTTOM_PAD  # 分隔 + 署名
+    height = hero_h + cards_h + footer_h + 6
 
     width = PAGE_WIDTH
-    img = PILImage.new("RGB", (width, height), BG)
+    img = PILImage.new("RGB", (width, height), BG_TOP)
     draw = ImageDraw.Draw(img)
 
-    # 实际绘制
-    y_end = _layout_y(TOP_PAD, real=True, draw=draw)   # 正文画完的 y（= TOP_PAD + content_h）
-    footer_line_y = y_end + footer_gap      # 签名线位置（锚定到正文，不再落在组间距中间）
-    draw.line((LEFT_PAD, footer_line_y, width - RIGHT_PAD, footer_line_y),
-              fill=HEADING_RULE, width=1)
-    footer_text_y = footer_line_y + footer_line_h + footer_text_gap
-    footer = f"作者：{author} · {version}"
-    draw.text((width - RIGHT_PAD - _text_width(draw, footer, f_subtitle),
-               footer_text_y), footer, font=f_subtitle, fill=MUTED)
+    # 背景：纵向渐变
+    for i, c in enumerate(_vgrad(BG_TOP, BG_BOTTOM, height)):
+        draw.line((0, i, width, i), fill=c)
+
+    # ------------------------------------------------------------------ #
+    # 顶部横幅
+    # ------------------------------------------------------------------ #
+    y = TOP_PAD
+    hero_box_x0 = CARD_MARGIN_X - 4
+    hero_box_x1 = width - CARD_MARGIN_X + 4
+    hero_box_y0 = y - 12
+    hero_box_y1 = y + f_h * len(hero_title_lines) + 8 + f_sh + 14 - 12
+    _draw_soft_shadow(draw, (hero_box_x0, hero_box_y0, hero_box_x1, hero_box_y1),
+                      radius=CARD_RADIUS, offset=4, color=(120, 130, 150))
+    _draw_rounded_rect(draw, (hero_box_x0, hero_box_y0, hero_box_x1, hero_box_y1),
+                       radius=CARD_RADIUS, fill=HERO_FROM)
+    _draw_horizontal_gradient(
+        draw, hero_box_x0 + 1, hero_box_y0 + 1,
+        hero_box_x1 - 1, hero_box_y1 - 1, HERO_FROM, HERO_TO)
+    # 主标题
+    ty = y
+    for ln in hero_title_lines:
+        draw.text((text_x0, ty), ln, font=f_title, fill=HERO_FG)
+        ty += f_h
+    ty += 8
+    # 副标题
+    draw.text((text_x0, ty), hero_subtitle, font=f_subtitle, fill=HERO_MUTED)
+    ty += f_sh + 14
+    # 版本徽标（右上角）
+    badge_x = hero_box_x1 - badge_w - 14
+    badge_y = hero_box_y0 + 14
+    _draw_rounded_rect(draw, (badge_x, badge_y, badge_x + badge_w, badge_y + badge_h),
+                       radius=badge_h // 2, fill=(255, 255, 255))
+    draw.text((badge_x + 12, badge_y + 5), badge_text, font=f_badge, fill=HERO_FROM)
+
+    # ------------------------------------------------------------------ #
+    # 卡片
+    # ------------------------------------------------------------------ #
+    y = hero_box_y1 + CARD_SPACING
+    for bi, blk in enumerate(blocks):
+        c_top = y
+        c_h = card_heights[bi]
+        c_box = (CARD_MARGIN_X, c_top, width - CARD_MARGIN_X, c_top + c_h)
+        # 阴影 + 卡片底
+        _draw_soft_shadow(draw, c_box, radius=CARD_RADIUS)
+        _draw_rounded_rect(draw, c_box, radius=CARD_RADIUS, fill=CARD_BG,
+                           outline=CARD_BORDER, width=1)
+        # 标题栏（彩色渐变，只圆上角）
+        theme_a, theme_b = blk["theme"]
+        head_box = (CARD_MARGIN_X, c_top, width - CARD_MARGIN_X, c_top + CARD_PAD_TOP + HEADBAR_H)
+        # 用圆角矩形画整个头部再裁：简单做法是画圆角矩形（整张头部圆角），
+        # 与卡片圆角一致，视觉自然。
+        _draw_rounded_rect(draw, head_box, radius=CARD_RADIUS, fill=theme_a)
+        _draw_horizontal_gradient(draw, head_box[0] + 1, head_box[1] + 1,
+                                  head_box[2] - 1, head_box[3] - 1,
+                                  theme_a, theme_b)
+        # 把标题栏下沿"接平"（盖住卡片内部圆角，使其与卡片身无缝衔接）
+        _draw_rounded_rect(draw,
+                           (CARD_MARGIN_X + 1, c_top + CARD_PAD_TOP + HEADBAR_H - 14,
+                            width - CARD_MARGIN_X - 1, c_top + CARD_PAD_TOP + HEADBAR_H),
+                           radius=0, fill=theme_b)
+        # 标题栏内文字（白字，垂直居中于标题栏）
+        ty = c_top + CARD_PAD_TOP + (HEADBAR_H - f_gh) // 2
+        for tl in blk["title_lines"]:
+            draw.text((text_x0, ty), tl, font=f_group, fill=(255, 255, 255))
+            ty += f_gh
+
+        # 条目
+        iy = c_top + CARD_PAD_TOP + HEADBAR_H + GROUP_SPACING
+        for lines, is_note in blk["items"]:
+            if not lines:
+                continue
+            lh = f_nh if is_note else f_ih
+            first = lines[0]
+            if is_note:
+                # 说明行：浅灰，无圆点，缩进
+                nx = text_x0 + note_indent
+                draw.text((nx, iy), first, font=f_note, fill=MUTED)
+                iy += lh
+                for cont in lines[1:]:
+                    draw.text((nx, iy), cont, font=f_note, fill=MUTED)
+                    iy += lh
+                iy += 6
+                continue
+            # 指令行：彩色圆点 + 指令名高亮（/xxx 部分用主题深色加粗，其余正常）
+            cy = iy + lh // 2
+            dot_cx = text_x0 + dot_r
+            draw.ellipse((dot_cx - dot_r, cy - dot_r, dot_cx + dot_r, cy + dot_r),
+                         fill=theme_a)
+            tx = text_x0 + bullet_col
+            # 把指令行拆成"指令名"与"说明"两段高亮
+            seg_text, seg_rest, split_x = _split_command(first, draw, f_item, f_item_bold, tx, ty=iy)
+            draw.text((tx, iy), seg_text, font=f_item_bold, fill=theme_b)
+            if seg_rest:
+                rx = tx + split_x
+                draw.text((rx, iy), seg_rest, font=f_item, fill=FG)
+            iy += lh
+            for cont in lines[1:]:
+                # 续行缩进对齐到 bullet_col
+                cx = text_x0 + bullet_col
+                draw.text((cx, iy), cont, font=f_item, fill=FG)
+                iy += lh
+            iy += 6
+
+        y = c_top + c_h + CARD_SPACING
+
+    # ------------------------------------------------------------------ #
+    # 底部署名
+    # ------------------------------------------------------------------ #
+    fy = y + 4
+    draw.line((CARD_MARGIN_X + 8, fy, width - CARD_MARGIN_X - 8, fy),
+              fill=BORDER_LINE, width=1)
+    footer = f"作者：{author} · {version} · 渲染于本地（无需外部服务）"
+    draw.text((CARD_MARGIN_X + 8, fy + 10), footer, font=f_subtitle, fill=MUTED)
 
     meta = {
         "font_file": str(_find_chinese_font() or "builtin"),
@@ -383,6 +545,24 @@ def _render_groups(
         "fallback_sizes": list(_fallback_sizes),
     }
     return img, meta
+
+
+def _split_command(text: str, draw: ImageDraw.ImageDraw, font, bold_font,
+                   x0: int, ty: int) -> tuple[str, str, int]:
+    """把指令行拆成"指令名（/xxx）"与"其余说明"两段，返回
+    (指令段文字, 剩余段文字, 指令段像素宽度)。
+
+    规则：若文本以 "/" 开头，取到第一个空格为止作为指令段（加粗高亮），
+    其余作为说明段；若不是 "/..."（说明行已在外部过滤），整段作指令段处理。
+    """
+    if text.startswith("/") and len(text) > 1:
+        sp = text.find(" ")
+        if sp > 0:
+            cmd = text[:sp]
+            rest = text[sp + 1:].lstrip()
+            w = _text_width(draw, cmd, bold_font)
+            return cmd, rest, w
+    return text, "", _text_width(draw, text, bold_font)
 
 
 def _line_h(font) -> int:
