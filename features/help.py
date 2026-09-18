@@ -3,16 +3,21 @@
 原 ``help.js``：
 
 * ``/涩批文字帮助`` 等 —— 发送文字版使用说明
-* ``/涩批图片帮助`` 等 —— 发送帮助图（插件 assets/help.jpg），
-  文件不存在时回退为 HTML 渲染的文字帮助图。
+* ``/涩批图片帮助`` 等 —— 发送帮助图。优先用插件自带的
+  ``assets/help.jpg``；若该文件不存在，则**本地**用 Pillow 把最新帮助
+  文本即时渲染成一张长图（不依赖外部截图服务），渲染失败再回退到纯
+  文字版。
 """
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
+from ..app_core.render import render_text_help_image
+from ..app_core.settings import PLUGIN_VERSION
 from ._base import spFeature
 
 AUTHOR = "寂寞沙洲冷 QV：1638276310"
@@ -45,7 +50,7 @@ def build_help_text() -> str:
         "【P站图片获取】",
         "· /pid <数字> - 获取P站单张作品",
         "· /随机 X 张 Y 作品 - 随机获取画师作品（X ≤ 20）",
-        "· /来 X 张 XX图 - 按标签搜索图片（X ≤ 60）",
+        "· /来图 X 张 XX图 - 按标签搜索图片（X ≤ 60）",
         "",
         "【磁力链接】",
         "· /磁力猫 <关键词> [文件类型] [排序] [数量] - 磁力猫搜索",
@@ -81,27 +86,15 @@ def build_help_text() -> str:
     return "\n".join(lines)
 
 
-HELP_TEMPLATE = """
-<div style="font-family: 'Microsoft YaHei', sans-serif; width: 760px; padding: 28px;
-            background: #fdfdfa; color: #202224; font-size: 17px; line-height: 1.7;">
-  <h1 style="font-size: 30px; margin: 0 0 6px 0;">涩批 AstrBot 插件 · 指令手册</h1>
-  <div style="color: #666b70; font-size: 15px; margin-bottom: 18px;">
-    AstrBot 版 · 作者：{{ author }}
-  </div>
-  {% for group in groups %}
-  <div style="margin-bottom: 14px;">
-    <div style="font-weight: 700; color: #2f86bd; margin-bottom: 4px;">{{ group.title }}</div>
-    {% for item in group.items %}
-    <div style="padding-left: 10px;">· {{ item }}</div>
-    {% endfor %}
-  </div>
-  {% endfor %}
-</div>
-"""
-
-
 def help_groups() -> list[dict]:
-    """把帮助文本整理成结构化数据，方便 HTML 模板渲染。"""
+    """把帮助文本整理成结构化数据（供本地渲染器使用）。
+
+    每个 item 保留**该行在图里应显示的原始文本**：
+    - 以 ``·``/``.`` 开头的行，前缀剥掉后存（渲染器会为这类 item 加 ``· `` 项目符号）；
+    - 其它普通行（如磁力分组里的缩进说明行），原样存（渲染器不加项目符号）；
+    - 行首的 ``·``/``.`` 有无、以及"这是说明行还是指令行"由本函数的
+      ``is_command`` 标记决定，渲染器只负责折行与像素对齐，不再自己造前缀。
+    """
     groups: list[dict] = []
     current: dict | None = None
     for line in build_help_text().split("\n"):
@@ -112,12 +105,16 @@ def help_groups() -> list[dict]:
             current = {"title": stripped.strip("【】"), "items": []}
             groups.append(current)
             continue
+        if current is None:
+            continue
+        # 作者行已单独画在图底部署名线，这里跳过，避免被误塞进"插件管理"分组
+        if stripped.startswith("作者："):
+            continue
         if stripped.startswith("·") or stripped.startswith("."):
-            item = stripped.lstrip("·. ").strip()
-            if current is not None:
-                current["items"].append(item)
-        elif current is not None:
-            current["items"].append(stripped)
+            item_text = stripped.lstrip("·. ").strip()
+            current["items"].append({"text": item_text, "bullet": True})
+        else:
+            current["items"].append({"text": stripped, "bullet": False})
     return groups
 
 
@@ -125,21 +122,43 @@ class HelpFeature(spFeature):
     """帮助相关业务方法（指令 handler 由主类 main.py 注册）。"""
 
     async def _send_help_image(self, event: AstrMessageEvent):
-        """优先发送插件自带帮助图，缺失时用 HTML 渲染。"""
+        """优先发送插件自带帮助图，缺失时本地用 Pillow 即时渲染。
+
+        渲染不依赖任何外部服务（不抓截图、不下载文生图），每次都会按
+        最新的帮助文本重新生成一张长图，保证与 ``build_help_text`` 内容
+        始终一致。渲染失败时回退为纯文字版。
+        """
         local = Path(self.paths.asset("help.jpg"))
         if local.exists():
             yield event.image_result(str(local))
             return
 
+        # 本地即时渲染（每次调用都是新图，不缓存，随文本内容自动更新）
         try:
-            url = await self.html_render(  # type: ignore[attr-defined]
-                HELP_TEMPLATE,
-                {"author": AUTHOR, "groups": help_groups()},
-                options={"type": "jpeg", "quality": 90, "full_page": True},
+            out = self.temp_path(f"sp_help_{random.randint(1000, 9999)}.jpg")
+            render_text_help_image(
+                groups=help_groups(),
+                author=AUTHOR,
+                version=PLUGIN_VERSION,
+                out_path=out,
             )
-            yield event.image_result(url)
+            yield event.image_result(str(out))
+            return
         except Exception:
-            yield event.plain_result(
-                "未找到 assets/help.jpg，且文转图失败，已改为发送文字帮助：\n\n"
-                + build_help_text()
-            )
+            pass
+
+        # 兜底：直接发文字版
+        yield event.plain_result(
+            "未找到 assets/help.jpg，本地渲染也失败，已改为发送文字帮助：\n\n"
+            + build_help_text()
+        )
+
+    # ------------------------------------------------------------------ #
+    # 诊断：查看当前本地渲染用了哪个字体（用于确认中文能否正常显示）
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _diagnose_font() -> str:
+        from ..app_core.render import _find_chinese_font
+
+        p = _find_chinese_font()
+        return str(p) if p else "builtin (Pillow 默认字体，无法显示中文)"

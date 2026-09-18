@@ -24,8 +24,24 @@ class FileCache:
         self._memory: dict[str, bytes] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
-    def _path_for(self, key: str, suffix: str = ".bin") -> Path:
+    def _path_for(self, key: str, suffix: str = "") -> Path:
+        """统一用 ``{key}{suffix}`` 作为磁盘文件名。
+
+        命中检查与落盘必须用**同一套**后缀规则：落盘时先 ``guess_suffix``
+        猜出真实扩展名写盘，命中检查时枚举常见扩展名 + 无扩展名兜底，
+        避免"写的是 .jpg、查的却是 .bin"导致磁盘缓存永远 miss。
+        """
         return self.cache_dir / f"{key}{suffix}"
+
+    _DISK_SUFFIXES: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".gif", ".webp", "")
+
+    def _find_disk_file(self, key: str) -> Path | None:
+        """按已知后缀顺序找该 key 的磁盘文件，找不到返回 None。"""
+        for suffix in self._DISK_SUFFIXES:
+            path = self._path_for(key, suffix)
+            if path.exists():
+                return path
+        return None
 
     def _lock_for(self, key: str) -> asyncio.Lock:
         lock = self._locks.get(key)
@@ -47,8 +63,9 @@ class FileCache:
         if use_memory and key in self._memory:
             return self._memory[key]
 
-        path = self._path_for(key)
-        if path.exists():
+        # 命中检查：枚举已知后缀找磁盘文件
+        path = self._find_disk_file(key)
+        if path is not None:
             try:
                 if time.time() - path.stat().st_mtime <= self.max_age_seconds:
                     data = path.read_bytes()
@@ -60,7 +77,8 @@ class FileCache:
 
         async with self._lock_for(key):
             # 双重检查，避免同一 URL 并发重复下载
-            if path.exists():
+            path = self._find_disk_file(key)
+            if path is not None:
                 try:
                     data = path.read_bytes()
                     if use_memory:

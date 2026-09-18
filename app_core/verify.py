@@ -83,10 +83,11 @@ async def fetch_magnet_info(
     except HttpError:
         pass
 
-    # 2) 回退到 Playwright
+    # 2) 回退到 Playwright（仅捕获浏览器相关错误；_fetch_with_browser
+    # 内部已把 HTTP/JSON 解析等异常归一化为 BrowserError 或返回 None）
     try:
         payload = await _fetch_with_browser(url, timeout=timeout)
-    except (BrowserError, Exception):
+    except BrowserError:
         payload = None
     if payload:
         return MagnetInfo(payload)

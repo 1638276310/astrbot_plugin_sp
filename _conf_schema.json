@@ -3,7 +3,7 @@
     "description": "Pixiv 接口地址",
     "type": "string",
     "default": "https://pid.kkndp.cn",
-    "hint": "用于 #pid / #随机X张Y作品 / #来X张XX图 的第三方 Pixiv 接口。若接口失效可在此更换。"
+    "hint": "用于 /pid / /随机X张Y作品 / /来图X张XX图 的第三方 Pixiv 接口。若接口失效可在此更换。"
   },
   "dingyue_api": {
     "description": "画师订阅接口地址",

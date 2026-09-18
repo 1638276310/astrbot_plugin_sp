@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from urllib.parse import quote
 
-from .browser import BrowserError, browser_context, goto, query_all_text
+from .browser import BrowserError, browser_context, goto
 from .settings import FILE_TYPE_MAP, ORDER_TYPE_MAP, PluginSettings
 
 
@@ -208,5 +208,4 @@ __all__ = [
     "build_search_urls",
     "search_magnet",
     "describe_results",
-    "query_all_text",
 ]

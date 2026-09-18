@@ -12,7 +12,7 @@ AstrBot 只要求插件类所在的文件名为 ``main.py``。
 * ``features/sj.py``            随机短视频
 * ``features/pixiv_pid.py``     /pid
 * ``features/pixiv_artist.py``  /随机X张Y作品
-* ``features/pixiv_tag.py``     /来X张XX图
+* ``features/pixiv_tag.py``     /来图 X 张 XX图
 * ``features/mzt.py``           妹子图
 * ``features/mtb.py``           美图吧套图
 * ``features/magnet.py``        磁力猫 / 验车
@@ -23,11 +23,14 @@ AstrBot 只要求插件类所在的文件名为 ``main.py``。
 
 from __future__ import annotations
 
+import asyncio
 import random
 from pathlib import Path
 
 from astrbot.api import logger # type: ignore
+from astrbot.api.all import AstrBotConfig # type: ignore
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
+from astrbot.api.message_components import Image, Node, Plain # type: ignore
 from astrbot.api.star import Context, Star, register # type: ignore
 from astrbot.core.star.star_tools import StarTools # type: ignore
 
@@ -55,11 +58,23 @@ from .features.pixiv_artist import ARTIST_PATTERN
 from .features.cos_images import CATEGORY_MAP, TYPE_NAME, IMAGE_COUNT
 from .features.sj import REFERER
 from .features.subscribe import SUBSCRIBE_PAT, UNSUBSCRIBE_PAT
-from .app_core.mtb import collect_album_urls
+from .app_core.http import fetch_bytes
+from .app_core.imaging import add_noise, save_bytes
+from .app_core.magnetcat import describe_results, parse_command, search_magnet
+from .app_core.mtb import collect_album_urls, parse_detail_url
+from .app_core.mzt import collect_article_ids, parse_article_id
 from .app_core.paths import PLUGIN_NAME, PluginPaths
 from .app_core.scheduler import TimeBasedScheduler
-from .app_core.settings import PLUGIN_VERSION, build_settings
+from .app_core.settings import (
+    ORDER_LABEL,
+    ORDER_MAP,
+    PLUGIN_VERSION,
+    R18_MODE_LABEL,
+    R18_MODE_MAP,
+    build_settings,
+)
 from .app_core.storage import JsonStore
+from .app_core.verify import fetch_magnet_info
 
 
 @register(
@@ -89,8 +104,13 @@ class spPlugin(
     发送 ``/涩批文字帮助`` 可以查看全部指令。
     """
 
-    def __init__(self, context: Context, config=None) -> None:
-        super().__init__(context, config)
+    def __init__(self, context: Context, config: AstrBotConfig | None = None) -> None:
+        # Star.__init__(self, context, config=None)（见 astrbot/core/star/base.py）。
+        # 这里显式传入 config，与 get_px 参考实现保持一致。
+        # Pylance 在解析不到 astrbot 包时会把 Star 当成 object（其 __init__ 只接受
+        # self），误报"context 应为 0 个位置参数"；运行时签名合法，按 PEP 8/
+        # PEP 257 的注释要求说明原因后用 type: ignore 屏蔽该误报。
+        super().__init__(context, config)  # type: ignore[call-arg]
         # 注入运行时依赖：配置 + 数据目录
         self.settings = build_settings(config)
         self.paths = PluginPaths(context, plugin_name=PLUGIN_NAME)
@@ -156,8 +176,6 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     async def _scheduled_mzt_update(self) -> None:
         """定时增量更新写真 ID 列表。"""
-        from .app_core.mzt import collect_article_ids
-
         existing = set(self.mzt_ids())
         discovered = await collect_article_ids(self.settings, existing)
         if not discovered:
@@ -172,8 +190,6 @@ class spPlugin(
 
     async def _scheduled_mtb_update(self) -> None:
         """定时增量更新套图 URL 列表。"""
-        from .app_core.mtb import collect_album_urls
-
         existing = self.album_urls()
         merged, total_pages = await collect_album_urls(
             self.settings,
@@ -285,7 +301,7 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/设置sp撤回 60（10-120 秒）")
                 return
-            raw = m.group(1)
+            raw = m.group(1) or ""
         seconds = int(raw)
         if seconds < 10 or seconds > 120:
             yield event.plain_result("建议设置为10-120秒哦")
@@ -314,13 +330,13 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/设置R18模式 2（0:全部 1:非R18 2:R18）")
                 return
-            raw = m.group(1)
-        from .app_core.settings import R18_MODE_LABEL, R18_MODE_MAP
+            raw = m.group(1) or ""
 
-        mode = R18_MODE_MAP.get(raw, "all")
-        self.settings.r18_mode = mode
+        # 参数 mode 是 int（指令尾随数字），r18_key 是字符串映射结果，两者区分开
+        r18_key = R18_MODE_MAP.get(raw, "all")
+        self.settings.r18_mode = r18_key
         yield event.plain_result(
-            f"已设置R18模式为{mode}（{R18_MODE_LABEL.get(mode, mode)}）\n"
+            f"已设置R18模式为{r18_key}（{R18_MODE_LABEL.get(r18_key, r18_key)}）\n"
             "0:全部    1:非R18    2:R18"
         )
 
@@ -341,8 +357,7 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/设置图片偏好 1（0:无 1:男 2:女）")
                 return
-            raw = m.group(1)
-        from .app_core.settings import ORDER_LABEL, ORDER_MAP
+            raw = m.group(1) or ""
 
         order = ORDER_MAP.get(raw, "popular_d")
         self.settings.image_preference = order
@@ -357,8 +372,6 @@ class spPlugin(
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
-
-        from .app_core.settings import ORDER_LABEL, R18_MODE_LABEL
 
         lines = [
             "【涩批插件状态】",
@@ -424,7 +437,9 @@ class spPlugin(
             return
 
         try:
-            nodes = self.text_nodes(event, header + body + footer)
+            # 整个列表作为一个合并转发节点（而非每行一个节点），
+            # 避免"每行一条消息"的观感
+            nodes = self.text_nodes(event, [text])
             yield event.chain_result([self.wrap_nodes(nodes)])
         except Exception:
             yield event.plain_result(text)
@@ -447,10 +462,8 @@ class spPlugin(
             return
 
         url = random.choice(urls)
-        target = self.temp_path("sp_video.mp4")
+        target = self.temp_path(f"sp_video_{random.randint(1000, 9999)}.mp4")
         try:
-            from .app_core.http import fetch_bytes
-
             data = await fetch_bytes(
                 url,
                 timeout=90,
@@ -484,7 +497,8 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/pid <数字>，例如 /pid 123456")
                 return
-            pid = m.group(1)
+            # group(1) 类型是 str | None；正则已命中且该分组必匹配，用 or "" 兜底
+            pid = m.group(1) or ""
 
         yield event.plain_result("正在搜索，请稍等...")
 
@@ -525,8 +539,8 @@ class spPlugin(
         if not parsed:
             yield event.plain_result("用法：/随机 X 张 Y 作品，例如 /随机 3 张 123456 作品")
             return
-        count = int(parsed.group(1))
-        artist_id = parsed.group(2)
+        count = int(parsed.group(1) or 0)
+        artist_id = parsed.group(2) or ""
 
         if count <= 0:
             yield event.plain_result("张数需要大于 0 哦")
@@ -577,18 +591,18 @@ class spPlugin(
             yield event.plain_result(f"发生错误：{exc}")
 
     # ------------------------------------------------------------------ #
-    # P 站：/来X张XX图（features/pixiv_tag.py）
+    # P 站：/来图 X 张 XX图（features/pixiv_tag.py）
     # ------------------------------------------------------------------ #
-    @filter.command("来", priority=20)
+    @filter.command("来图", priority=20)
     async def sp_pixiv_tag(self, event: AstrMessageEvent):
-        """按标签搜索 P 站图片（/来 X 张 XX图，X ≤ 60）"""
+        """按标签搜索 P 站图片（/来图 X 张 XX图，X ≤ 60）"""
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
 
         parsed = TAG_PATTERN.search(event.get_message_str().strip())
         if not parsed:
-            yield event.plain_result("用法：/来 X 张 XX图，例如 /来 10 张 白丝图")
+            yield event.plain_result("用法：/来图 X 张 XX图，例如 /来图 10 张 白丝图")
             return
         count = int(parsed.group(1))
         tag = (parsed.group(2) or "").strip()
@@ -647,8 +661,6 @@ class spPlugin(
         if not await self.guard(event):
             return
 
-        from .app_core.mzt import parse_article_id
-
         article_id = parse_article_id(event.get_message_str())
         if not article_id:
             yield event.plain_result("用法：/写真馆 <ID>，例如 /写真馆 12345")
@@ -683,8 +695,6 @@ class spPlugin(
         if not await self.require_admin(event):
             return
         yield event.plain_result("开始增量更新写真ID列表，这可能需要几分钟时间...")
-
-        from .app_core.mzt import collect_article_ids
 
         existing = set(self.mzt_ids())
         try:
@@ -729,12 +739,10 @@ class spPlugin(
         if not await self.guard(event):
             return
 
-        from .app_core.mtb import parse_detail_url
-
         if not url:
             m = DETAIL_URL_PATTERN.search(event.get_message_str())
-            url = m.group(1) if m else ""
-        if not url.startswith("http"):
+            url = (m.group(1) or "") if m else ""
+        if not url or not url.startswith("http"):
             yield event.plain_result("用法：/套图详情 <URL>")
             return
         parsed = parse_detail_url(url)
@@ -808,16 +816,12 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/验车 <magnet:...>")
                 return
-            magnet = m.group(1)
-        if not magnet.startswith("magnet:"):
+            magnet = m.group(1) or ""
+        if not magnet or not magnet.startswith("magnet:"):
             yield event.plain_result("用法：/验车 <magnet:...>")
             return
 
         yield event.plain_result("正在验车，请稍等...")
-
-        from .app_core.verify import fetch_magnet_info
-
-        import asyncio
 
         info = None
         last_error = ""
@@ -852,11 +856,9 @@ class spPlugin(
             )
             if not data:
                 continue
-            from .app_core.imaging import add_noise, save_bytes
-
             if self.settings.track_pixel:
                 data = add_noise(data)
-            target = self.temp_path(f"verify_{index}.jpg")
+            target = self.temp_path(f"verify_{index}_{random.randint(1000, 9999)}.jpg")
             try:
                 save_bytes(target, data)
             except OSError:
@@ -866,15 +868,13 @@ class spPlugin(
         if not paths:
             return
 
-        from astrbot.api.message_components import Node, Plain as _Plain, Image
-
         if self.settings.forward_as_node:
             sender_name = event.get_sender_name() or "涩批"
             self_id = str(event.get_self_id() or "0")
             merged: list = []
             for index, path in enumerate(paths, start=1):
                 merged.append(
-                    Node(content=[_Plain(text=f"截图 {index}")], name=sender_name, uin=self_id)
+                    Node(content=[Plain(text=f"截图 {index}")], name=sender_name, uin=self_id)
                 )
                 merged.append(
                     Node(
@@ -901,8 +901,6 @@ class spPlugin(
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
-
-        from .app_core.magnetcat import parse_command, search_magnet, describe_results
 
         if not keyword:
             parsed = parse_command(event.get_message_str())
@@ -985,7 +983,7 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/订阅画师 <画师ID>")
                 return
-            artist_id = m.group(1)
+            artist_id = m.group(1) or ""
 
         session = self.session_key(event)
         data = self.load_data()
@@ -1044,7 +1042,7 @@ class spPlugin(
             if not m:
                 yield event.plain_result("用法：/取消订阅 <画师ID>")
                 return
-            artist_id = m.group(1)
+            artist_id = m.group(1) or ""
         session = self.session_key(event)
         data = self.load_data()
         entry = data.get(session)
@@ -1167,11 +1165,6 @@ class spPlugin(
 
     async def _download_cos_images(self, url: str, prefix: str) -> list[str]:
         """从接口抓取若干张图片并保存到本地。"""
-        import asyncio
-
-        from .app_core.http import fetch_bytes
-        from .app_core.imaging import add_noise, save_bytes
-
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * IMAGE_COUNT
 

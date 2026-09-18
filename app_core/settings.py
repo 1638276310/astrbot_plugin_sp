@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PLUGIN_VERSION = "v1.0.0"
+PLUGIN_VERSION = "v1.1"
 
 # 与原 TRSS 插件 config/api.js 保持一致的上游接口
 DEFAULT_PIXIV_API_BASE = "https://pid.kkndp.cn"

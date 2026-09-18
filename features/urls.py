@@ -13,24 +13,9 @@ from ._base import spFeature
 
 
 class UrlFeature(spFeature):
-    """网址导航相关业务方法（指令 handler 由主类 main.py 注册）。"""
+    """网址导航相关业务方法（指令 handler 与分组解析均在主类 main.py 上）。
 
-    def _resolve_group(self, command: str) -> str | None:
-        """把指令名映射到配置中的分组名。"""
-        command = command.strip()
-        if command == "写真网址":
-            return "写真"
-        if command == "福利网址":
-            return "福利"
-        if command == "吃瓜网址":
-            return "吃瓜"
-        if command == "导航网址":
-            return "导航"
-        if command.lower().startswith("福利app"):
-            return "福利App"
-        if command == "TG电报":
-            return "TG电报"
-        for name in self.settings.group_names:
-            if command == f"{name}网址":
-                return name
-        return None
+    本网页导航功能逻辑极简（纯配置读取 + 消息发送），全部由
+    ``main.py`` 的 ``sp_send_urls`` 与 ``_resolve_url_group`` 直接实现，
+    本 Mixin 不保留独立方法，避免与 main.py 出现两套同义实现漂移。
+    """
