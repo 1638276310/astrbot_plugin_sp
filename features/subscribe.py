@@ -52,18 +52,27 @@ class SubscribeFeature(spFeature):
 
     def load_data(self) -> dict[str, Any]:
         data = self.store().load()
+        if isinstance(data, dict):
+            logger.debug(
+                f"[涩批DEBUG] load_data：读到 {len(data)} 个会话订阅记录"
+            )
+        else:
+            logger.debug("[涩批DEBUG] load_data：数据为空或损坏，返回空字典")
         return data if isinstance(data, dict) else {}
 
     def save_data(self, data: dict[str, Any]) -> None:
         self.store().set(data, persist=True)
+        logger.debug(f"[涩批DEBUG] save_data：已保存 {len(data)} 个会话订阅记录")
 
     # ------------------------------------------------------------------ #
     # 定时推送
     # ------------------------------------------------------------------ #
     async def push_updates(self) -> None:
         """检查所有订阅画师的更新并推送（供调度器调用）。"""
+        logger.debug("[涩批DEBUG] push_updates：开始检查画师订阅更新")
         data = self.load_data()
         if not data:
+            logger.debug("[涩批DEBUG] push_updates：没有订阅数据，跳过")
             return
 
         artist_ids: list[str] = []
@@ -73,17 +82,30 @@ class SubscribeFeature(spFeature):
 
         unique_ids = list(dict.fromkeys(artist_ids))
         if not unique_ids:
+            logger.debug("[涩批DEBUG] push_updates：会话中没有画师订阅，跳过")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] push_updates：共 {len(unique_ids)} 个画师待检查：{unique_ids}"
+        )
         updates = await self.pixiv.fetch_updates(unique_ids)
         if not updates:
+            logger.debug("[涩批DEBUG] push_updates：没有发现任何新作品")
             return
+
+        logger.debug(
+            f"[涩批DEBUG] push_updates：共 {len(updates)} 个画师有新作品："
+            + ", ".join(f"{k}({len(v)})" for k, v in updates.items())
+        )
 
         for session, entry in data.items():
             if not entry.get("pushEnabled"):
                 continue
             umo = entry.get("umo") or ""
             if not umo:
+                logger.debug(
+                    f"[涩批DEBUG] push_updates：会话 {session} 未设置 umo，跳过"
+                )
                 continue
             artists = entry.get("artists") or {}
             for artist_id, artist_name in artists.items():
@@ -91,6 +113,10 @@ class SubscribeFeature(spFeature):
                 if not new_works:
                     continue
                 for work_id in new_works[:PUSH_MAX_WORKS]:
+                    logger.debug(
+                        f"[涩批DEBUG] push_updates：推送 {artist_name}({artist_id}) "
+                        f"的新作品 {work_id} -> {umo}"
+                    )
                     try:
                         await self._push_work(umo, artist_id, artist_name, work_id)
                     except Exception as exc:
@@ -110,16 +136,21 @@ class SubscribeFeature(spFeature):
         from astrbot.api.event import MessageChain # type: ignore
         from astrbot.api.message_components import Image, Plain # type: ignore
 
+        logger.debug(f"[涩批DEBUG] _push_work：开始获取作品 {work_id}")
         details = await self.pixiv.fetch_illust(work_id)
         if not details or not details.get("body"):
+            logger.debug(f"[涩批DEBUG] _push_work：作品 {work_id} 无详情数据")
             return
         body = details["body"]
         urls = self._image_urls(body)
         if not urls:
+            logger.debug(f"[涩批DEBUG] _push_work：作品 {work_id} 无图片地址")
             return
 
+        logger.debug(f"[涩批DEBUG] _push_work：作品 {work_id} 共 {len(urls)} 张图片")
         paths = await self._download_push_images(urls)
         if not paths:
+            logger.debug(f"[涩批DEBUG] _push_work：作品 {work_id} 图片全部下载失败")
             return
 
         text = "\n".join(
@@ -139,6 +170,9 @@ class SubscribeFeature(spFeature):
         chain = MessageChain().message(text)
         for path in paths:
             chain.chain.append(Image.fromFileSystem(path))
+        logger.debug(
+            f"[涩批DEBUG] _push_work：发送 {len(paths)} 张图片 -> {umo}"
+        )
         await self.context.send_message(umo, chain)  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------ #
@@ -154,6 +188,9 @@ class SubscribeFeature(spFeature):
                     url, timeout=self.settings.download_timeout
                 )
                 if not data:
+                    logger.debug(
+                        f"[涩批DEBUG] _download_push_images：第 {index + 1}/{len(urls)} 张下载失败：{url[:80]}"
+                    )
                     return
                 if self.settings.track_pixel:
                     data = add_noise(data)
@@ -162,12 +199,19 @@ class SubscribeFeature(spFeature):
                 )
                 try:
                     save_bytes(target, data)
-                except OSError:
+                except OSError as exc:
+                    logger.debug(
+                        f"[涩批DEBUG] _download_push_images：第 {index + 1}/{len(urls)} 张保存失败：{exc!r}"
+                    )
                     return
                 results[index] = str(target)
 
         await asyncio.gather(*(worker(i, url) for i, url in enumerate(urls)))
-        return [path for path in results if path]
+        paths = [path for path in results if path]
+        logger.debug(
+            f"[涩批DEBUG] _download_push_images：成功下载 {len(paths)}/{len(urls)} 张"
+        )
+        return paths
 
     @staticmethod
     def _image_urls(body: dict) -> list[str]:

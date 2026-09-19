@@ -13,6 +13,15 @@ from .browser import BrowserError, browser_context, goto
 from .settings import FILE_TYPE_MAP, ORDER_TYPE_MAP, PluginSettings
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 class MagnetResult:
     """单条磁力搜索结果。"""
 
@@ -94,7 +103,12 @@ async def search_magnet(
 ) -> tuple[list[MagnetResult], str]:
     """在多个镜像站上搜索，返回 (结果列表, 错误信息)。"""
     urls = build_search_urls(settings, keyword, file_type, order)
+    _dbg(
+        f"magnetcat.search_magnet：关键词={keyword!r} 类型={file_type!r} "
+        f"排序={order!r} 数量={count}，共 {len(urls)} 个镜像站"
+    )
     if not urls:
+        _dbg("magnetcat.search_magnet：镜像站列表为空")
         return [], "磁力猫站点列表为空，请在插件配置中填写。"
 
     last_error = ""
@@ -104,17 +118,20 @@ async def search_magnet(
         page,
     ):
         for url in urls:
+            _dbg(f"magnetcat.search_magnet：尝试镜像站 {url}")
             try:
                 await goto(page, url, timeout_ms=timeout * 1000)
                 try:
                     await page.wait_for_selector(".ssbox", timeout=8_000)
                 except Exception:
                     last_error = "该镜像站没有返回结果"
+                    _dbg(f"magnetcat.search_magnet：{url} 等待 .ssbox 超时")
                     continue
 
                 boxes = await page.query_selector_all(".ssbox")
                 if not boxes:
                     last_error = "该镜像站没有返回结果"
+                    _dbg(f"magnetcat.search_magnet：{url} 无 .ssbox 元素")
                     continue
 
                 results: list[MagnetResult] = []
@@ -123,15 +140,22 @@ async def search_magnet(
                     if result is not None:
                         results.append(result)
                 if results:
+                    _dbg(
+                        f"magnetcat.search_magnet：{url} 成功，共 {len(results)} 条结果"
+                    )
                     return results, ""
                 last_error = "解析结果为空"
+                _dbg(f"magnetcat.search_magnet：{url} 解析结果为空")
             except BrowserError as exc:
                 last_error = str(exc)
+                _dbg(f"magnetcat.search_magnet：{url} 浏览器错误 {exc}")
                 continue
             except Exception as exc:  # pragma: no cover - 网络/页面异常
                 last_error = str(exc)
+                _dbg(f"magnetcat.search_magnet：{url} 异常 {exc!r}")
                 continue
 
+    _dbg(f"magnetcat.search_magnet：所有镜像站均无结果：{last_error}")
     return [], last_error or "所有镜像站均无搜索结果"
 
 

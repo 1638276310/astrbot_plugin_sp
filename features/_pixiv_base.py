@@ -29,6 +29,11 @@ class PixivBase(spFeature):
     referer: str | None = None,
     prefix: str = "pixiv",
     ) -> list[str]:
+        from astrbot.api import logger # type: ignore
+        logger.debug(
+            f"[涩批DEBUG] pixiv.download_images：共 {len(urls)} 个URL，"
+            f"prefix={prefix!r}，referer={referer!r}"
+        )
         return await super().download_images(
         urls, referer=referer, prefix=prefix
     )

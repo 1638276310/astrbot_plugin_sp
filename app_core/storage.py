@@ -13,15 +13,27 @@ from pathlib import Path
 from typing import Any
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 def load_json(path: Path, default: Any) -> Any:
     """读取 JSON 文件，文件不存在或损坏时返回默认值。"""
     try:
         if not path.exists():
+            _dbg(f"load_json：文件不存在 {path}")
             return default
         with path.open("r", encoding="utf-8") as fp:
             data = json.load(fp)
+        _dbg(f"load_json：成功读取 {path}（type={type(data).__name__}）")
         return data if data is not None else default
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _dbg(f"load_json：读取 {path} 失败，使用默认值：{exc!r}")
         return default
 
 
@@ -35,8 +47,10 @@ def save_json(path: Path, data: Any) -> bool:
         with os.fdopen(fd, "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False, indent=2)
         os.replace(tmp_name, path)
+        _dbg(f"save_json：成功写入 {path}（type={type(data).__name__}）")
         return True
-    except OSError:
+    except OSError as exc:
+        _dbg(f"save_json：写入 {path} 失败：{exc!r}")
         return False
 
 
@@ -54,7 +68,9 @@ class JsonStore:
         return self._data
 
     def save(self) -> bool:
-        return save_json(self.path, self.load())
+        ok = save_json(self.path, self.load())
+        _dbg(f"JsonStore.save：{self.path} 保存{'成功' if ok else '失败'}")
+        return ok
 
     def reload(self) -> Any:
         self._data = None

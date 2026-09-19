@@ -11,6 +11,15 @@ from .http import HttpError, fetch_json
 from .settings import PluginSettings
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 def parse_cookie_header(raw: str) -> dict[str, str]:
     cookies: dict[str, str] = {}
     for part in str(raw or "").split(";"):
@@ -50,27 +59,37 @@ class PixivClient:
     # ------------------------------------------------------------------ #
     async def fetch_illust(self, pid: str | int) -> dict | None:
         """获取单张作品详情。失败返回 None。"""
+        url = self.pid_url(pid)
+        _dbg(f"pixiv.fetch_illust：GET {url}")
         try:
             data = await fetch_json(
-                self.pid_url(pid),
+                url,
                 timeout=30,
                 cookies=self.cookie or None,
             )
-        except HttpError:
+            if isinstance(data, dict) and data.get("body"):
+                _dbg(f"pixiv.fetch_illust：PID={pid} 详情获取成功")
+            else:
+                _dbg(f"pixiv.fetch_illust：PID={pid} 详情为空或无 body 字段")
+            return data if isinstance(data, dict) else None
+        except HttpError as exc:
+            _dbg(f"pixiv.fetch_illust：PID={pid} 请求失败：{exc}")
             return None
-        if not isinstance(data, dict):
-            return None
-        return data
 
     async def fetch_artist(self, artist_id: str | int) -> dict | None:
         """获取画师详情。失败返回 None。"""
+        url = self.user_url(artist_id)
+        _dbg(f"pixiv.fetch_artist：GET {url}")
         try:
-            data = await fetch_json(self.user_url(artist_id), timeout=30)
-        except HttpError:
+            data = await fetch_json(url, timeout=30)
+            if isinstance(data, dict) and data.get("body"):
+                _dbg(f"pixiv.fetch_artist：画师 {artist_id} 详情获取成功")
+            else:
+                _dbg(f"pixiv.fetch_artist：画师 {artist_id} 详情为空或无 body 字段")
+            return data if isinstance(data, dict) else None
+        except HttpError as exc:
+            _dbg(f"pixiv.fetch_artist：画师 {artist_id} 请求失败：{exc}")
             return None
-        if not isinstance(data, dict):
-            return None
-        return data
 
     async def fetch_tag_ids(
         self,
@@ -81,20 +100,25 @@ class PixivClient:
     ) -> list[str]:
         """按标签搜索作品 ID 列表。"""
         url = self.tag_url(tag, mode=mode, order=order)
+        _dbg(f"pixiv.fetch_tag_ids：GET {url}")
         try:
             data = await fetch_json(url, timeout=30)
-        except HttpError:
+        except HttpError as exc:
+            _dbg(f"pixiv.fetch_tag_ids：标签 {tag!r} 请求失败：{exc}")
             return []
         if not isinstance(data, dict):
+            _dbg(f"pixiv.fetch_tag_ids：标签 {tag!r} 返回数据不是 dict")
             return []
         body = data.get("body") or {}
         items = body.get("data") if isinstance(body, dict) else None
         if not isinstance(items, list):
+            _dbg(f"pixiv.fetch_tag_ids：标签 {tag!r} 返回结构缺少 body.data 列表")
             return []
         ids: list[str] = []
         for item in items:
             if isinstance(item, dict) and item.get("id") is not None:
                 ids.append(str(item["id"]))
+        _dbg(f"pixiv.fetch_tag_ids：标签 {tag!r} 共 {len(ids)} 个ID")
         return ids
 
     # ------------------------------------------------------------------ #
@@ -104,6 +128,10 @@ class PixivClient:
         """调用订阅接口查询画师更新，返回 {画师ID: [新作品ID, ...]}。"""
         if not artist_ids:
             return {}
+        _dbg(
+            f"pixiv.fetch_updates：POST {self.settings.dingyue_api} "
+            f"画师数={len(artist_ids)}"
+        )
         try:
             data = await fetch_json(
                 self.settings.dingyue_api,
@@ -114,15 +142,22 @@ class PixivClient:
                     "user": artist_ids,
                 },
             )
-        except HttpError:
+        except HttpError as exc:
+            _dbg(f"pixiv.fetch_updates：请求失败：{exc}")
             return {}
         if not isinstance(data, dict):
+            _dbg("pixiv.fetch_updates：返回数据不是 dict")
             return {}
         response = data.get("response")
         if not isinstance(response, dict):
+            _dbg("pixiv.fetch_updates：返回数据缺少 response 字段")
             return {}
         result: dict[str, list[str]] = {}
         for artist_id, works in response.items():
             if isinstance(works, list):
                 result[str(artist_id)] = [str(work) for work in works]
+        _dbg(
+            f"pixiv.fetch_updates：{len(result)} 个画师有新作品："
+            + ", ".join(f"{k}({len(v)})" for k, v in result.items())
+        )
         return result

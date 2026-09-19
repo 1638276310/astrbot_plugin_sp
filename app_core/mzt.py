@@ -20,6 +20,16 @@ from .browser import (
 )
 from .settings import PluginSettings
 
+
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 MAX_IMAGES = 20
 ID_PATTERN = re.compile(r"/photo/(\d+)/?$")
 NEXT_BUTTON = (
@@ -72,6 +82,7 @@ async def fetch_album(
     解析失败会抛出 BrowserError。
     """
     base_url = album_url(settings, article_id)
+    _dbg(f"mzt.fetch_album：开始解析 {base_url}（timeout={timeout}s）")
     images: list[str] = []
     seen: set[str] = set()
     title = "未知标题"
@@ -88,14 +99,17 @@ async def fetch_album(
             page, "h1.uk-article-title.uk-text-truncate", title
         )
         publish_time = await query_first_text(page, "time", publish_time)
+        _dbg(f"mzt.fetch_album：标题={title!r} 时间={publish_time!r}")
 
         images = await _collect_images(page, seen, images)
+        _dbg(f"mzt.fetch_album：第 1 页收集到 {len(images)} 张图片")
         while len(images) < MAX_IMAGES:
             try:
                 next_button = await page.query_selector(NEXT_BUTTON)
             except Exception:
                 next_button = None
             if next_button is None:
+                _dbg("mzt.fetch_album：未找到下一页按钮，停止翻页")
                 break
             try:
                 await next_button.click()
@@ -103,9 +117,11 @@ async def fetch_album(
                 break
             await random_delay(600, 1400)
             images = await _collect_images(page, seen, images)
+            _dbg(f"mzt.fetch_album：翻页后累计 {len(images)} 张图片")
 
     if not title:
         title = "未知标题"
+    _dbg(f"mzt.fetch_album：解析完成 标题={title!r} 共 {len(images)} 张图片")
     return AlbumInfo(str(article_id), title, publish_time, images)
 
 
@@ -142,6 +158,10 @@ async def collect_article_ids(
     返回新发现的 ID（按页面顺序，去重）。
     """
     base_url = f"{settings.mzt_site}/photo/"
+    _dbg(
+        f"mzt.collect_article_ids：开始爬取 base_url={base_url} "
+        f"existing={len(existing)} full={full}"
+    )
     discovered: list[str] = []
     found: set[str] = set(existing)
     page_no = 1
@@ -153,9 +173,11 @@ async def collect_article_ids(
     ):
         while True:
             url = base_url if page_no == 1 else f"{base_url}page/{page_no}/"
+            _dbg(f"mzt.collect_article_ids：正在采集第 {page_no} 页 {url}")
             try:
                 await goto(page, url, timeout_ms=timeout * 1000)
-            except BrowserError:
+            except BrowserError as exc:
+                _dbg(f"mzt.collect_article_ids：第 {page_no} 页打开失败：{exc}")
                 break
 
             try:
@@ -175,20 +197,27 @@ async def collect_article_ids(
                 if match:
                     page_ids.append(match.group(1))
 
+            _dbg(f"mzt.collect_article_ids：第 {page_no} 页共 {len(page_ids)} 个ID")
             if not page_ids:
                 break
 
             if not full and all(item in found for item in page_ids):
+                _dbg(f"mzt.collect_article_ids：第 {page_no} 页全部已存在，增量模式停止")
                 break
 
+            new_count = 0
             for item in page_ids:
                 if item not in found:
                     found.add(item)
                     discovered.append(item)
+                    new_count += 1
+            _dbg(f"mzt.collect_article_ids：第 {page_no} 页新增 {new_count} 个，累计 {len(discovered)} 个")
 
             await random_delay(600, 1200)
             page_no += 1
             if page_no > 500:  # 安全上限
+                _dbg("mzt.collect_article_ids：达到安全上限 500 页，停止")
                 break
 
+    _dbg(f"mzt.collect_article_ids：结束，共新增 {len(discovered)} 个ID")
     return discovered

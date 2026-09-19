@@ -10,6 +10,8 @@ AstrBot 的 Video 组件可以直接吃网络 URL，但快手 CDN 需要 Referer
 
 from __future__ import annotations
 
+from astrbot.api import logger # type: ignore
+
 from ._base import spFeature
 from ..app_core.storage import load_json, save_json
 
@@ -30,16 +32,26 @@ class VideoFeature(spFeature):
         self.paths.ensure_video_urls()
         data = load_json(self.paths.video_urls_file, [])
         if isinstance(data, list) and data:
-            return [str(item) for item in data]
+            urls = [str(item) for item in data]
+            logger.debug(f"[涩批DEBUG] video_urls：从持久化文件读到 {len(urls)} 个直链")
+            return urls
         # 兜底：尝试从 assets 资源目录读取
         asset_file = self.paths.asset("sp_video_urls.json")
         if asset_file.exists():
             data = load_json(asset_file, [])
             if isinstance(data, list) and data:
-                return [str(item) for item in data]
+                urls = [str(item) for item in data]
+                logger.debug(
+                    f"[涩批DEBUG] video_urls：从 assets 文件读到 {len(urls)} 个直链"
+                )
+                return urls
         # 兼容旧配置项兜底
-        return getattr(self.settings, "sp_video_urls", [])
+        fallback = getattr(self.settings, "sp_video_urls", [])
+        logger.debug(f"[涩批DEBUG] video_urls：文件与 assets 均为空，使用配置项 {len(fallback)} 个")
+        return fallback
 
     def save_video_urls(self, urls: list[str]) -> bool:
         """保存视频列表到持久化目录。"""
-        return save_json(self.paths.video_urls_file, urls)
+        ok = save_json(self.paths.video_urls_file, urls)
+        logger.debug(f"[涩批DEBUG] save_video_urls：写入 {len(urls)} 个直链，结果 {ok}")
+        return ok

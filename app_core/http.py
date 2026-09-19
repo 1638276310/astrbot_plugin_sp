@@ -12,6 +12,16 @@ from typing import Any
 
 import aiohttp # type: ignore[import]
 
+
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -72,6 +82,7 @@ async def fetch_bytes(
     proxy: str | None = None,
 ) -> bytes:
     """下载二进制内容。"""
+    _dbg(f"fetch_bytes：GET {url[:120]} timeout={timeout}s referer={referer!r}")
     client_timeout = aiohttp.ClientTimeout(total=timeout)
     try:
         async with aiohttp.ClientSession(timeout=client_timeout) as session:
@@ -82,12 +93,16 @@ async def fetch_bytes(
                 allow_redirects=True,
             ) as resp:
                 if resp.status != 200:
+                    _dbg(f"fetch_bytes：{url[:120]} 返回 HTTP {resp.status}")
                     raise HttpError(f"HTTP {resp.status}", resp.status)
                 body = await resp.content.read(max_size)
+                _dbg(f"fetch_bytes：{url[:120]} 成功，共 {len(body)} 字节")
                 return body
     except aiohttp.ClientError as exc:
+        _dbg(f"fetch_bytes：{url[:120]} 网络错误 {exc!r}")
         raise HttpError(f"网络请求失败: {exc}") from exc
     except asyncio.TimeoutError as exc:
+        _dbg(f"fetch_bytes：{url[:120]} 超时（{timeout}s）")
         raise HttpError("网络请求超时") from exc
 
 
@@ -124,6 +139,7 @@ async def fetch_json(
     cookies: dict[str, str] | None = None,
 ) -> Any:
     """请求并解析 JSON。"""
+    _dbg(f"fetch_json：{method.upper()} {url[:120]} timeout={timeout}s")
     client_timeout = aiohttp.ClientTimeout(total=timeout)
     req_headers = _headers(ua, referer, headers)
     if json_body is not None:
@@ -140,14 +156,20 @@ async def fetch_json(
             ) as resp:
                 text = await resp.text()
                 if resp.status != 200:
+                    _dbg(f"fetch_json：{url[:120]} 返回 HTTP {resp.status}: {text[:200]}")
                     raise HttpError(f"HTTP {resp.status}: {text[:200]}", resp.status)
                 try:
-                    return jsonlib.loads(text)
+                    data = jsonlib.loads(text)
+                    _dbg(f"fetch_json：{url[:120]} 解析成功（type={type(data).__name__}）")
+                    return data
                 except jsonlib.JSONDecodeError as exc:
+                    _dbg(f"fetch_json：{url[:120]} 返回内容不是合法 JSON：{text[:200]}")
                     raise HttpError(f"返回内容不是合法 JSON: {text[:200]}") from exc
     except aiohttp.ClientError as exc:
+        _dbg(f"fetch_json：{url[:120]} 网络错误 {exc!r}")
         raise HttpError(f"网络请求失败: {exc}") from exc
     except asyncio.TimeoutError as exc:
+        _dbg(f"fetch_json：{url[:120]} 超时（{timeout}s）")
         raise HttpError("网络请求超时") from exc
 
 
@@ -160,6 +182,7 @@ async def fetch_many(
     ua: str | None = None,
 ) -> list[tuple[str, bytes | None]]:
     """并发下载多个 URL，返回 [(url, bytes|None)]，保持输入顺序。"""
+    _dbg(f"fetch_many：共 {len(urls)} 个URL，并发 {concurrency}")
     semaphore = asyncio.Semaphore(max(1, concurrency))
     results: list[tuple[str, bytes | None]] = [None] * len(urls)  # type: ignore[list-item]
 
@@ -172,4 +195,6 @@ async def fetch_many(
                 results[index] = (url, None)
 
     await asyncio.gather(*(worker(i, url) for i, url in enumerate(urls)))
-    return [item for item in results if item is not None]
+    out = [item for item in results if item is not None]
+    _dbg(f"fetch_many：成功 {len(out)}/{len(urls)} 个")
+    return out

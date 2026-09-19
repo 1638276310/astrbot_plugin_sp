@@ -34,6 +34,15 @@ class BrowserError(Exception):
     """浏览器相关错误。"""
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 LAUNCH_ARGS = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
@@ -46,6 +55,7 @@ LAUNCH_ARGS = [
 def ensure_playwright() -> None:
     """确认 playwright 可用，否则抛出带安装提示的错误。"""
     if not PLAYWRIGHT_AVAILABLE:
+        _dbg(f"ensure_playwright：playwright 不可用，{PLAYWRIGHT_IMPORT_ERROR}")
         raise BrowserError(
             "未安装 playwright，请先执行 `pip install playwright` 与 "
             f"`playwright install chromium`。（{PLAYWRIGHT_IMPORT_ERROR}）"
@@ -62,8 +72,13 @@ async def browser_context(
     proxy: str | None = None,
 ):
     """启动浏览器并返回 (browser, context, page)。"""
+    _dbg(
+        f"browser_context：开始 headless={headless} timeout_ms={timeout_ms} "
+        f"proxy={proxy!r}"
+    )
     ensure_playwright()
     playwright = await async_playwright().start() # type: ignore
+    _dbg("browser_context：playwright 已启动")
     launch_kwargs: dict[str, Any] = {
         "headless": headless,
         "args": LAUNCH_ARGS,
@@ -74,6 +89,7 @@ async def browser_context(
     browser = None
     try:
         browser = await playwright.chromium.launch(**launch_kwargs)
+        _dbg("browser_context：chromium 已启动")
         context = await browser.new_context(
             user_agent=user_agent or random.choice(USER_AGENTS),
             extra_http_headers=extra_headers or {},
@@ -83,13 +99,18 @@ async def browser_context(
         context.set_default_timeout(timeout_ms)
         context.set_default_navigation_timeout(timeout_ms)
         page = await context.new_page()
+        _dbg("browser_context：浏览器上下文与页面已就绪")
         yield browser, context, page
+    except Exception as exc:
+        _dbg(f"browser_context：浏览器启动/运行失败：{exc!r}")
+        raise
     finally:
         try:
             if browser is not None:
                 await browser.close()
         finally:
             await playwright.stop()
+            _dbg("browser_context：playwright 已停止")
 
 
 async def goto(
@@ -100,9 +121,12 @@ async def goto(
     wait_until: str = "domcontentloaded",
 ) -> None:
     """打开页面，忽略等待策略上的兼容性差异。"""
+    _dbg(f"goto：打开 {url[:120]}... timeout_ms={timeout_ms}")
     try:
         await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+        _dbg(f"goto：成功打开 {url[:120]}")
     except Exception as exc:
+        _dbg(f"goto：打开 {url[:120]} 失败：{exc!r}")
         raise BrowserError(f"打开页面失败 {url}: {exc}") from exc
 
 
@@ -110,7 +134,8 @@ async def query_all_text(page: Page, selector: str) -> list[str]: # type: ignore
     """取所有匹配元素的 innerText。"""
     try:
         elements = await page.query_selector_all(selector)
-    except Exception:
+    except Exception as exc:
+        _dbg(f"query_all_text：{selector} 查询失败：{exc!r}")
         return []
     texts: list[str] = []
     for element in elements:
@@ -118,6 +143,7 @@ async def query_all_text(page: Page, selector: str) -> list[str]: # type: ignore
             texts.append((await element.inner_text()) or "")
         except Exception:
             continue
+    _dbg(f"query_all_text：{selector} 取到 {len(texts)} 段文本")
     return texts
 
 
@@ -125,7 +151,8 @@ async def query_all_attr(page: Page, selector: str, attr: str) -> list[str]: # t
     """取所有匹配元素的指定属性。"""
     try:
         elements = await page.query_selector_all(selector)
-    except Exception:
+    except Exception as exc:
+        _dbg(f"query_all_attr：{selector} 查询失败：{exc!r}")
         return []
     values: list[str] = []
     for element in elements:
@@ -135,6 +162,7 @@ async def query_all_attr(page: Page, selector: str, attr: str) -> list[str]: # t
             value = None
         if value:
             values.append(value)
+    _dbg(f"query_all_attr：{selector}[{attr}] 取到 {len(values)} 个值")
     return values
 
 
@@ -143,9 +171,11 @@ async def query_first_text(page: Page, selector: str, default: str = "") -> str:
     try:
         element = await page.query_selector(selector)
         if element is None:
+            _dbg(f"query_first_text：{selector} 未匹配到元素，返回默认值")
             return default
         return (await element.inner_text()) or default
-    except Exception:
+    except Exception as exc:
+        _dbg(f"query_first_text：{selector} 取文本失败：{exc!r}")
         return default
 
 
@@ -156,10 +186,13 @@ async def query_first_attr(
     try:
         element = await page.query_selector(selector)
         if element is None:
+            _dbg(f"query_first_attr：{selector} 未匹配到元素，返回默认值")
             return default
         value = await element.get_attribute(attr)
+        _dbg(f"query_first_attr：{selector}[{attr}] = {value!r}")
         return value or default
-    except Exception:
+    except Exception as exc:
+        _dbg(f"query_first_attr：{selector}[{attr}] 取属性失败：{exc!r}")
         return default
 
 

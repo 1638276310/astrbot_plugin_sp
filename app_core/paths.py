@@ -24,6 +24,15 @@ except Exception:  # pragma: no cover - 兼容极旧版本
 PLUGIN_NAME = "astrbot_plugin_sp"
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 class PluginPaths:
     """负责解析并创建插件所需的全部目录。
 
@@ -38,6 +47,7 @@ class PluginPaths:
         self.temp = self.root / "temp"
         self.cache = self.root / "cache"
         self.assets = Path(__file__).resolve().parent.parent / "assets"
+        _dbg(f"PluginPaths.__init__：root={self.root}, temp={self.temp}, cache={self.cache}")
         self._ensure()
 
     # ------------------------------------------------------------------ #
@@ -70,6 +80,7 @@ class PluginPaths:
         for path in (self.root, self.temp, self.cache):
             path.mkdir(parents=True, exist_ok=True)
         self.ensure_video_urls()
+        _dbg(f"PluginPaths._ensure：目录已就绪，temp 文件数 {len(list(self.temp.glob('*')))}")
 
     # ------------------------------------------------------------------ #
     # 常用文件

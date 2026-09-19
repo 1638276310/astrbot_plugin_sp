@@ -120,6 +120,18 @@ class spPlugin(
         logger.info(
             f"[涩批] 插件已加载，数据目录：{self.paths.root}"
         )
+        logger.debug(
+            f"[涩批DEBUG] 插件初始化完成：pixiv_api_base={self.settings.pixiv_api_base} "
+            f"dingyue_api={self.settings.dingyue_api} dingyue_key={self.settings.dingyue_key!r} "
+            f"magnet_api={self.settings.magnet_api} mzt_site={self.settings.mzt_site} "
+            f"mtb_site={self.settings.mtb_site} cos_api={self.settings.cos_api} "
+            f"forward_as_node={self.settings.forward_as_node} "
+            f"track_pixel={self.settings.track_pixel} "
+            f"enable_scheduler={self.settings.enable_scheduler} "
+            f"enable_id_whitelist={self.settings.enable_id_whitelist} "
+            f"id_whitelist={self.settings.id_whitelist!r} "
+            f"subscribe_check_interval={self.settings.subscribe_check_interval}h"
+        )
 
     # ------------------------------------------------------------------ #
     # 生命周期
@@ -130,9 +142,11 @@ class spPlugin(
         与 get_px 保持同构：数据目录统一通过 StarTools.get_data_dir
         获取（AstrBot 官方规范路径），不再依赖 context.get_data_dir()。
         """
+        logger.debug("[涩批DEBUG] initialize() 开始：解析数据目录")
         data_dir = StarTools.get_data_dir(PLUGIN_NAME)
         self.paths.root = Path(data_dir)
         self.paths._ensure()
+        logger.debug(f"[涩批DEBUG] 数据目录解析为：{self.paths.root}")
 
         cleaned = self.paths.cleanup_temp(3600)
         if cleaned:
@@ -140,6 +154,7 @@ class spPlugin(
 
         if not self.settings.enable_scheduler:
             logger.info("[涩批] 定时任务已在插件配置中关闭")
+            logger.debug("[涩批DEBUG] initialize() 结束：定时任务未启动（配置关闭）")
             return
 
         scheduler = TimeBasedScheduler(
@@ -163,23 +178,31 @@ class spPlugin(
         )
         scheduler.start()
         self.scheduler = scheduler
+        logger.debug(
+            f"[涩批DEBUG] 定时任务已启动：{scheduler.next_run_hint()}"
+        )
 
     async def terminate(self) -> None:
         """插件被卸载/停用时停掉定时任务并清理临时文件。"""
         if self.scheduler is not None:
             await self.scheduler.stop()
             self.scheduler = None
+            logger.debug("[涩批DEBUG] terminate()：定时任务已停止")
         self.paths.cleanup_temp(0)
+        logger.debug("[涩批DEBUG] terminate()：临时文件已清理")
 
     # ------------------------------------------------------------------ #
     # 定时任务的具体实现
     # ------------------------------------------------------------------ #
     async def _scheduled_mzt_update(self) -> None:
         """定时增量更新写真 ID 列表。"""
+        logger.debug("[涩批DEBUG] 定时任务[写真ID增量更新]开始")
         existing = set(self.mzt_ids())
+        logger.debug(f"[涩批DEBUG] 定时任务[写真ID增量更新]现有ID数量：{len(existing)}")
         discovered = await collect_article_ids(self.settings, existing)
         if not discovered:
             logger.info("[涩批] 写真ID增量更新：没有新ID")
+            logger.debug("[涩批DEBUG] 定时任务[写真ID增量更新]结束：无新增")
             return
         merged = list(dict.fromkeys(discovered + list(existing)))
         self.save_mzt_ids(merged)
@@ -187,10 +210,16 @@ class spPlugin(
             f"[涩批] 写真ID增量更新完成：新增 {len(discovered)} 个，"
             f"当前共 {len(merged)} 个"
         )
+        logger.debug(
+            f"[涩批DEBUG] 定时任务[写真ID增量更新]结束：新增 {len(discovered)} 个，"
+            f"当前共 {len(merged)} 个"
+        )
 
     async def _scheduled_mtb_update(self) -> None:
         """定时增量更新套图 URL 列表。"""
+        logger.debug("[涩批DEBUG] 定时任务[套图列表增量更新]开始")
         existing = self.album_urls()
+        logger.debug(f"[涩批DEBUG] 定时任务[套图列表增量更新]现有URL数量：{len(existing)}")
         merged, total_pages = await collect_album_urls(
             self.settings,
             existing=existing,
@@ -198,10 +227,15 @@ class spPlugin(
         )
         if total_pages is None:
             logger.warning("[涩批] 套图列表增量更新：无法获取总页数")
+            logger.debug("[涩批DEBUG] 定时任务[套图列表增量更新]失败：无法获取总页数")
             return
         self.save_album_urls(merged)
         logger.info(
             f"[涩批] 套图列表增量更新完成：现有 {len(merged)} 个"
+            f"（原有 {len(existing)} 个）"
+        )
+        logger.debug(
+            f"[涩批DEBUG] 定时任务[套图列表增量更新]结束：共 {len(merged)} 个"
             f"（原有 {len(existing)} 个）"
         )
 
@@ -225,10 +259,12 @@ class spPlugin(
             return
 
         message = event.get_message_str().strip()
+        logger.debug(f"[涩批DEBUG] /涩批文字帮助：消息={message!r}")
         if "图片" in message:
             async for result in self._send_help_image(event):
                 yield result
             return
+        logger.debug("[涩批DEBUG] /涩批文字帮助：发送文字版帮助")
         yield event.plain_result(build_help_text())
 
     @filter.command(
@@ -241,6 +277,7 @@ class spPlugin(
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
+        logger.debug("[涩批DEBUG] /涩批图片帮助：开始渲染/发送帮助图")
         async for result in self._send_help_image(event):
             yield result
 
@@ -273,6 +310,9 @@ class spPlugin(
         message = event.get_message_str()
         enabled = message.startswith("/开启") or message.startswith("开启")
         self.settings.recall = enabled
+        logger.debug(
+            f"[涩批DEBUG] /sp_toggle_recall：撤回功能已{'开启' if enabled else '关闭'}"
+        )
         if enabled:
             yield event.plain_result(
                 f"已开启撤回功能（当前撤回时间 {self.settings.recall_time} 秒）"
@@ -307,6 +347,7 @@ class spPlugin(
             yield event.plain_result("建议设置为10-120秒哦")
             return
         self.settings.recall_time = seconds
+        logger.debug(f"[涩批DEBUG] /sp_set_recall_time：撤回时间已设置为 {seconds} 秒")
         yield event.plain_result(f"已设置撤回时间为{seconds}秒")
 
     @filter.command(
@@ -335,6 +376,10 @@ class spPlugin(
         # 参数 mode 是 int（指令尾随数字），r18_key 是字符串映射结果，两者区分开
         r18_key = R18_MODE_MAP.get(raw, "all")
         self.settings.r18_mode = r18_key
+        logger.debug(
+            f"[涩批DEBUG] /sp_set_r18_mode：R18模式已设置为 {r18_key}"
+            f"（原始值 {raw}）"
+        )
         yield event.plain_result(
             f"已设置R18模式为{r18_key}（{R18_MODE_LABEL.get(r18_key, r18_key)}）\n"
             "0:全部    1:非R18    2:R18"
@@ -361,6 +406,10 @@ class spPlugin(
 
         order = ORDER_MAP.get(raw, "popular_d")
         self.settings.image_preference = order
+        logger.debug(
+            f"[涩批DEBUG] /sp_set_image_preference：图片偏好已设置为 {order}"
+            f"（原始值 {raw}）"
+        )
         yield event.plain_result(
             f"已设置图片偏好为{order}（{ORDER_LABEL.get(order, order)}）\n"
             "0:无偏好    1:男性偏好    2:女性偏好"
@@ -389,6 +438,7 @@ class spPlugin(
         if scheduler is not None:
             hints = scheduler.next_run_hint()
             lines.append("定时任务：" + ("；".join(hints) if hints else "未启用"))
+        logger.debug(f"[涩批DEBUG] /sp_status：定时任务{'已启动' if scheduler else '未启动'}")
         yield event.plain_result("\n".join(lines))
 
     # ------------------------------------------------------------------ #
@@ -408,11 +458,13 @@ class spPlugin(
         command = event.get_message_str().strip().lstrip("/")
         group = self._resolve_url_group(command)
         if group is None:
+            logger.debug(f"[涩批DEBUG] /sp_send_urls：未识别的网址指令 {command!r}")
             yield event.plain_result("未识别的网址类型。")
             return
 
         urls = self.settings.url_group(group)
         if not urls:
+            logger.debug(f"[涩批DEBUG] /sp_send_urls：分组 {group!r} 的网址列表为空")
             yield event.plain_result(
                 f"「{group}」的网址列表为空，请在插件配置 url_groups 中补充。"
             )
@@ -431,6 +483,10 @@ class spPlugin(
             "请复制链接到浏览器打开，切勿直接点击",
         ]
         text = "\n".join(header + body + footer)
+        logger.debug(
+            f"[涩批DEBUG] /sp_send_urls：分组 {group!r} 共 {len(urls)} 个网址，"
+            f"forward_as_node={self.settings.forward_as_node}"
+        )
 
         if not self.settings.forward_as_node:
             yield event.plain_result(text)
@@ -440,8 +496,10 @@ class spPlugin(
             # 整个列表作为一个合并转发节点（而非每行一个节点），
             # 避免"每行一条消息"的观感
             nodes = self.text_nodes(event, [text])
+            logger.debug(f"[涩批DEBUG] /sp_send_urls：以合并转发节点发送")
             yield event.chain_result([self.wrap_nodes(nodes)])
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"[涩批DEBUG] /sp_send_urls：合并转发发送失败，回退为纯文本：{exc!r}")
             yield event.plain_result(text)
 
     # ------------------------------------------------------------------ #
@@ -456,6 +514,10 @@ class spPlugin(
 
         urls = self.video_urls()
         if not urls:
+            logger.debug(
+                f"[涩批DEBUG] /sp_random_video：视频列表为空"
+                f"（{self.paths.video_urls_file}）"
+            )
             yield event.plain_result(
                 f"视频列表为空，请在数据目录 {self.paths.video_urls_file} 中补充视频直链。"
             )
@@ -463,6 +525,9 @@ class spPlugin(
 
         url = random.choice(urls)
         target = self.temp_path(f"sp_video_{random.randint(1000, 9999)}.mp4")
+        logger.debug(
+            f"[涩批DEBUG] /sp_random_video：共 {len(urls)} 个视频直链，随机取 {url[:80]}..."
+        )
         try:
             data = await fetch_bytes(
                 url,
@@ -471,13 +536,20 @@ class spPlugin(
                 max_size=200 * 1024 * 1024,
             )
             target.write_bytes(data)
+            logger.debug(
+                f"[涩批DEBUG] /sp_random_video：视频下载成功 {len(data)} 字节 -> {target}"
+            )
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /sp_random_video：视频下载失败：{exc!r}")
             yield event.plain_result(f"视频发送失败，请稍后再试（{exc}）")
             return
 
         try:
             yield event.chain_result([self.video_component(target)])
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                f"[涩批DEBUG] /sp_random_video：视频消息发送失败，回退提示：{exc!r}"
+            )
             yield event.plain_result("视频发送失败，请稍后再试")
         finally:
             self.safe_unlink(target)
@@ -495,34 +567,44 @@ class spPlugin(
         if not pid:
             m = PID_PATTERN.search(event.get_message_str())
             if not m:
+                logger.debug("[涩批DEBUG] /pid：未能从消息中解析出 PID")
                 yield event.plain_result("用法：/pid <数字>，例如 /pid 123456")
                 return
             # group(1) 类型是 str | None；正则已命中且该分组必匹配，用 or "" 兜底
             pid = m.group(1) or ""
 
+        logger.debug(f"[涩批DEBUG] /pid：准备获取作品 PID={pid}")
         yield event.plain_result("正在搜索，请稍等...")
 
         try:
             details = await self.pixiv.fetch_illust(pid)
             if not details or not details.get("body"):
+                logger.debug(f"[涩批DEBUG] /pid：PID={pid} 无详情数据")
                 yield event.plain_result("请输入正确的pid")
                 return
 
             body = details["body"]
             urls = self.image_urls(body)
             if not urls:
+                logger.debug(f"[涩批DEBUG] /pid：PID={pid} 作品没有可用图片地址")
                 yield event.plain_result("该作品没有可用的图片地址")
                 return
 
+            logger.debug(f"[涩批DEBUG] /pid：PID={pid} 图片数量：{len(urls)}")
             paths = await self.download_images(urls)
             if not paths:
+                logger.debug(f"[涩批DEBUG] /pid：PID={pid} 图片全部下载失败")
                 yield event.plain_result("图片下载失败，请稍后再试")
                 return
 
+            logger.debug(
+                f"[涩批DEBUG] /pid：PID={pid} 成功下载 {len(paths)} 张图片，准备发送"
+            )
             text = self.work_text(body)
             for result in await self.send_works(event, [(text, paths)]):
                 yield result
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /pid：发生错误：{exc!r}")
             yield event.plain_result(f"发生错误：{exc}")
 
     # ------------------------------------------------------------------ #
@@ -537,57 +619,77 @@ class spPlugin(
 
         parsed = ARTIST_PATTERN.search(event.get_message_str().strip())
         if not parsed:
+            logger.debug("[涩批DEBUG] /随机：未能解析 张数/画师ID 参数")
             yield event.plain_result("用法：/随机 X 张 Y 作品，例如 /随机 3 张 123456 作品")
             return
         count = int(parsed.group(1) or 0)
         artist_id = parsed.group(2) or ""
 
         if count <= 0:
+            logger.debug(f"[涩批DEBUG] /随机：张数 {count} 非法（需 > 0）")
             yield event.plain_result("张数需要大于 0 哦")
             return
         if count > 20:
+            logger.debug(f"[涩批DEBUG] /随机：张数 {count} 超过上限 20")
             yield event.plain_result("一次最多看20张哦")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] /随机：画师 {artist_id}，目标张数 {count}，开始获取画师详情"
+        )
         yield event.plain_result("正在搜索，请稍等...")
 
         try:
             artist = await self.pixiv.fetch_artist(artist_id)
             if not artist or artist.get("error") or not artist.get("body"):
+                logger.debug(f"[涩批DEBUG] /随机：画师 {artist_id} 详情获取失败")
                 yield event.plain_result("请输入正确的画师ID")
                 return
 
             body = artist.get("body") or {}
             illusts = body.get("illusts")
             if not isinstance(illusts, dict) or not illusts:
+                logger.debug(f"[涩批DEBUG] /随机：画师 {artist_id} 没有可用作品")
                 yield event.plain_result("该画师没有可用的作品")
                 return
 
             work_ids = list(illusts.keys())
             random.shuffle(work_ids)
             selected = work_ids[:count]
+            logger.debug(
+                f"[涩批DEBUG] /随机：画师 {artist_id} 共 {len(work_ids)} 个作品，"
+                f"随机选中 {len(selected)} 个：{selected}"
+            )
 
             works: list[tuple[str, list[str]]] = []
             for work_id in selected:
                 details = await self.pixiv.fetch_illust(work_id)
                 if not details or not details.get("body"):
+                    logger.debug(f"[涩批DEBUG] /随机：作品 {work_id} 无详情数据，跳过")
                     continue
                 work_body = details["body"]
                 urls = self.image_urls(work_body)
                 if not urls:
+                    logger.debug(f"[涩批DEBUG] /随机：作品 {work_id} 无图片地址，跳过")
                     continue
                 paths = await self.download_images(urls)
                 if not paths:
+                    logger.debug(f"[涩批DEBUG] /随机：作品 {work_id} 图片下载失败，跳过")
                     continue
                 works.append((self.work_text(work_body), paths))
 
             if not works:
+                logger.debug(f"[涩批DEBUG] /随机：画师 {artist_id} 没有获取到任何作品")
                 yield event.plain_result("没有获取到作品，请稍后再试")
                 return
 
+            logger.debug(
+                f"[涩批DEBUG] /随机：画师 {artist_id} 共 {len(works)} 个作品成功获取，准备发送"
+            )
             for result in await self.send_works(event, works):
                 yield result
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /随机：发生错误：{exc!r}")
             yield event.plain_result(f"发生错误：{exc}")
 
     # ------------------------------------------------------------------ #
@@ -602,18 +704,25 @@ class spPlugin(
 
         parsed = TAG_PATTERN.search(event.get_message_str().strip())
         if not parsed:
+            logger.debug("[涩批DEBUG] /来图：未能解析 张数/标签 参数")
             yield event.plain_result("用法：/来图 X 张 XX图，例如 /来图 10 张 白丝图")
             return
         count = int(parsed.group(1))
         tag = (parsed.group(2) or "").strip()
 
         if count <= 0:
+            logger.debug(f"[涩批DEBUG] /来图：张数 {count} 非法（需 > 0）")
             yield event.plain_result("张数需要大于 0 哦")
             return
         if count > 60:
+            logger.debug(f"[涩批DEBUG] /来图：张数 {count} 超过上限 60")
             yield event.plain_result("你想冲死吗？")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] /来图：标签={tag!r} 目标张数={count} "
+            f"r18_mode={self.settings.r18_mode} order={self.settings.image_preference}"
+        )
         yield event.plain_result("正在搜索，请稍等...")
 
         try:
@@ -623,32 +732,45 @@ class spPlugin(
                 order=self.settings.image_preference,
             )
             if not ids:
+                logger.debug(f"[涩批DEBUG] /来图：标签 {tag!r} 没有搜到任何ID")
                 yield event.plain_result("没有这种图啊，涩批！")
                 return
 
             selected = self._random_ids(ids, count)
+            logger.debug(
+                f"[涩批DEBUG] /来图：标签 {tag!r} 共搜到 {len(ids)} 个ID，"
+                f"随机选中 {len(selected)} 个"
+            )
             works: list[tuple[str, list[str]]] = []
             for pid in selected:
                 details = await self.pixiv.fetch_illust(pid)
                 if not details or not details.get("body"):
+                    logger.debug(f"[涩批DEBUG] /来图：作品 {pid} 无详情数据，跳过")
                     continue
                 body = details["body"]
                 urls = self.image_urls(body)[:5]
                 if not urls:
+                    logger.debug(f"[涩批DEBUG] /来图：作品 {pid} 无图片地址，跳过")
                     continue
                 paths = await self.download_images(urls)
                 if not paths:
+                    logger.debug(f"[涩批DEBUG] /来图：作品 {pid} 图片下载失败，跳过")
                     continue
                 works.append((self.work_text(body), paths))
 
             if not works:
+                logger.debug(f"[涩批DEBUG] /来图：标签 {tag!r} 没有获取到任何图片")
                 yield event.plain_result("没有获取到图片，请稍后再试")
                 return
 
+            logger.debug(
+                f"[涩批DEBUG] /来图：标签 {tag!r} 共 {len(works)} 个作品成功获取，准备发送"
+            )
             for result in await self.send_works(event, works):
                 yield result
             yield event.plain_result("所有图片发送完毕！")
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /来图：发生错误：{exc!r}")
             yield event.plain_result(f"发生错误：{exc}")
 
     # ------------------------------------------------------------------ #
@@ -663,8 +785,10 @@ class spPlugin(
 
         article_id = parse_article_id(event.get_message_str())
         if not article_id:
+            logger.debug("[涩批DEBUG] /写真馆：未能从消息中解析出文章ID")
             yield event.plain_result("用法：/写真馆 <ID>，例如 /写真馆 12345")
             return
+        logger.debug(f"[涩批DEBUG] /写真馆：开始获取文章ID={article_id}")
         yield event.plain_result("正在搜索，请稍等...")
         async for result in self._send_mzt_album(event, article_id):
             yield result
@@ -681,9 +805,11 @@ class spPlugin(
 
         ids = self.mzt_ids()
         if not ids:
+            logger.debug("[涩批DEBUG] /随机写真：写真ID列表为空")
             yield event.plain_result("写真ID列表为空，请先使用 /更新写真ID")
             return
         article_id = random.choice(ids)
+        logger.debug(f"[涩批DEBUG] /随机写真：随机抽取ID={article_id}")
         yield event.plain_result(f"写真ID：{article_id} 正在搜索，请稍等...")
         async for result in self._send_mzt_album(event, article_id):
             yield result
@@ -697,23 +823,31 @@ class spPlugin(
 
         if not await self.require_admin(event):
             return
+        logger.debug("[涩批DEBUG] /更新写真ID：开始增量更新")
         yield event.plain_result("开始增量更新写真ID列表，这可能需要几分钟时间...")
 
         existing = set(self.mzt_ids())
+        logger.debug(f"[涩批DEBUG] /更新写真ID：现有ID数量 {len(existing)}")
         try:
             discovered = await collect_article_ids(self.settings, existing)
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /更新写真ID：采集失败 {exc!r}")
             yield event.plain_result(f"更新失败: {exc}")
             return
 
         if discovered:
             merged = list(dict.fromkeys(discovered + list(existing)))
             self.save_mzt_ids(merged)
+            logger.debug(
+                f"[涩批DEBUG] /更新写真ID：新增 {len(discovered)} 个，"
+                f"当前共 {len(merged)} 个"
+            )
             yield event.plain_result(
                 f"写真ID增量更新完成：新增 {len(discovered)} 个，"
                 f"当前共 {len(merged)} 个"
             )
         else:
+            logger.debug("[涩批DEBUG] /更新写真ID：没有发现新ID")
             yield event.plain_result("写真ID增量更新：没有新ID")
 
     # ------------------------------------------------------------------ #
@@ -728,9 +862,13 @@ class spPlugin(
 
         urls = self.album_urls()
         if not urls:
+            logger.debug("[涩批DEBUG] /随机美图吧：套图URL列表为空")
             yield event.plain_result("套图URL列表为空，请先使用 /更新套图列表")
             return
         url = random.choice(urls)
+        logger.debug(
+            f"[涩批DEBUG] /随机美图吧：共 {len(urls)} 个URL，随机取 {url}"
+        )
         yield event.plain_result("正在随机抽取一套美图，请稍等...")
         async for result in self._send_album(event, url):
             yield result
@@ -746,12 +884,15 @@ class spPlugin(
             m = DETAIL_URL_PATTERN.search(event.get_message_str())
             url = (m.group(1) or "") if m else ""
         if not url or not url.startswith("http"):
+            logger.debug("[涩批DEBUG] /套图详情：未识别出有效URL")
             yield event.plain_result("用法：/套图详情 <URL>")
             return
         parsed = parse_detail_url(url)
         if not parsed:
+            logger.debug(f"[涩批DEBUG] /套图详情：URL {url} 解析失败")
             yield event.plain_result("URL 格式不正确")
             return
+        logger.debug(f"[涩批DEBUG] /套图详情：解析URL成功 {url}")
         yield event.plain_result("正在解析套图，请稍等...")
         async for result in self._send_album(event, parsed):
             yield result
@@ -767,26 +908,34 @@ class spPlugin(
             return
         existing = self.album_urls()
         if not existing:
+            logger.debug("[涩批DEBUG] /更新套图列表：列表为空，转全量更新")
             yield event.plain_result("套图URL列表为空，自动转为全量更新...")
             async for result in self._full_update(event):
                 yield result
             return
 
+        logger.debug(f"[涩批DEBUG] /更新套图列表：增量更新开始，现有 {len(existing)} 个")
         yield event.plain_result("开始增量更新套图URL列表（只采集最新页面）...")
         try:
             merged, total_pages = await collect_album_urls(
                 self.settings, existing=existing, incremental=True
             )
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /更新套图列表：增量更新失败 {exc!r}")
             yield event.plain_result(f"增量更新失败: {exc}")
             return
 
         if total_pages is None:
+            logger.warning("[涩批DEBUG] /更新套图列表：无法获取总页数，增量更新终止")
             yield event.plain_result("无法获取总页数，增量更新终止")
             return
 
         added = len(merged) - len(existing)
         self.save_album_urls(merged)
+        logger.debug(
+            f"[涩批DEBUG] /更新套图列表：增量更新完成，新增 {max(0, added)} 个，"
+            f"共 {len(merged)} 个"
+        )
         yield event.plain_result(
             f"增量更新完成！本次新增 {max(0, added)} 个套图"
             f"（现有总计 {len(merged)} 个，原为 {len(existing)} 个）"
@@ -801,6 +950,7 @@ class spPlugin(
 
         if not await self.require_admin(event):
             return
+        logger.debug("[涩批DEBUG] /全量更新套图列表：开始全量更新")
         async for result in self._full_update(event):
             yield result
 
@@ -817,13 +967,16 @@ class spPlugin(
         if not magnet:
             m = MAGNET_LINK_PATTERN.search(event.get_message_str())
             if not m:
+                logger.debug("[涩批DEBUG] /验车：未能从消息中解析出磁力链接")
                 yield event.plain_result("用法：/验车 <magnet:...>")
                 return
             magnet = m.group(1) or ""
         if not magnet or not magnet.startswith("magnet:"):
+            logger.debug(f"[涩批DEBUG] /验车：参数 {magnet!r} 不是合法的磁力链接")
             yield event.plain_result("用法：/验车 <magnet:...>")
             return
 
+        logger.debug(f"[涩批DEBUG] /验车：开始查询 {magnet[:80]}...")
         yield event.plain_result("正在验车，请稍等...")
 
         info = None
@@ -834,19 +987,32 @@ class spPlugin(
                 if info is not None:
                     break
                 last_error = "无效的响应数据"
+                logger.debug(
+                    f"[涩批DEBUG] /验车：第 {attempt} 次尝试返回无效响应数据"
+                )
             except Exception as exc:
                 last_error = str(exc)
+                logger.debug(
+                    f"[涩批DEBUG] /验车：第 {attempt} 次尝试异常：{exc!r}"
+                )
             if attempt < 3:
                 await asyncio.sleep(2.0)
 
         if info is None:
+            logger.warning(f"[涩批DEBUG] /验车：3次尝试后仍未查到数据：{last_error}")
             yield event.plain_result(f"查询失败: {last_error or '未知错误'}")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] /验车：查询成功，文件 {info.name}，"
+            f"类型 {info.file_type}，数量 {info.count}，"
+            f"大小 {info.size_gb}GB，截图 {len(info.screenshots)} 张"
+        )
         yield event.plain_result(info.describe(magnet))
 
         screenshots = info.screenshots[:MAX_SCREENSHOTS]
         if not screenshots:
+            logger.debug("[涩批DEBUG] /验车：无截图，跳过图片发送")
             return
 
         paths: list[str] = []
@@ -858,19 +1024,30 @@ class spPlugin(
                 use_memory=False,
             )
             if not data:
+                logger.debug(
+                    f"[涩批DEBUG] /验车：截图 {index} 下载失败 {shot_url[:80]}"
+                )
                 continue
             if self.settings.track_pixel:
                 data = add_noise(data)
             target = self.temp_path(f"verify_{index}_{random.randint(1000, 9999)}.jpg")
             try:
                 save_bytes(target, data)
-            except OSError:
+            except OSError as exc:
+                logger.debug(
+                    f"[涩批DEBUG] /验车：截图 {index} 保存失败：{exc!r}"
+                )
                 continue
             paths.append(str(target))
 
         if not paths:
+            logger.debug("[涩批DEBUG] /验车：所有截图均未成功落盘，跳过图片发送")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] /验车：成功获取 {len(paths)} 张截图，"
+            f"forward_as_node={self.settings.forward_as_node}"
+        )
         if self.settings.forward_as_node:
             sender_name = event.get_sender_name() or "涩批"
             self_id = str(event.get_self_id() or "0")
@@ -908,6 +1085,7 @@ class spPlugin(
         if not keyword:
             parsed = parse_command(event.get_message_str())
             if not parsed:
+                logger.debug("[涩批DEBUG] /磁力猫：未能解析出搜索关键词")
                 yield event.plain_result("用法：/磁力猫 <关键词> [类型] [排序] [数量]")
                 return
             keyword, file_type, order, count = parsed
@@ -923,6 +1101,10 @@ class spPlugin(
             count = 10
         count = min(count, 50)
 
+        logger.debug(
+            f"[涩批DEBUG] /磁力猫：关键词={keyword!r} 类型={file_type!r} "
+            f"排序={order!r} 数量={count}"
+        )
         yield event.plain_result("正在搜索，请稍等...")
 
         try:
@@ -934,14 +1116,20 @@ class spPlugin(
                 count=count,
             )
         except Exception as exc:
+            logger.error(f"[涩批DEBUG] /磁力猫：搜索异常 {exc!r}")
             yield event.plain_result(f"搜索失败: {exc}")
             return
 
         if not results:
+            logger.warning(f"[涩批DEBUG] /磁力猫：无搜索结果，error={error!r}")
             yield event.plain_result(error or "所有链接均无搜索结果")
             return
 
         texts = describe_results(results)
+        logger.debug(
+            f"[涩批DEBUG] /磁力猫：共 {len(results)} 条结果，"
+            f"forward_as_node={self.settings.forward_as_node}"
+        )
         if self.settings.forward_as_node:
             nodes = self.text_nodes(event, texts)
             for batch in self.build_batches(nodes):
@@ -959,6 +1147,7 @@ class spPlugin(
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
+        logger.debug(f"[涩批DEBUG] /2图：开始获取二次元图包")
         async for result in self._send_cos(event, "2图"):
             yield result
 
@@ -968,6 +1157,7 @@ class spPlugin(
         self.stop_event_if_needed(event)
         if not await self.guard(event):
             return
+        logger.debug(f"[涩批DEBUG] /3图：开始获取现实图包")
         async for result in self._send_cos(event, "3图"):
             yield result
 
@@ -984,18 +1174,27 @@ class spPlugin(
         if not artist_id:
             m = SUBSCRIBE_PAT.search(event.get_message_str())
             if not m:
+                logger.debug("[涩批DEBUG] /订阅画师：未能从消息中解析出画师ID")
                 yield event.plain_result("用法：/订阅画师 <画师ID>")
                 return
             artist_id = m.group(1) or ""
 
         session = self.session_key(event)
         data = self.load_data()
+        logger.debug(
+            f"[涩批DEBUG] /订阅画师：会话={session!r} 画师ID={artist_id!r} "
+            f"当前订阅总数={len(data)}"
+        )
 
         if (
             self.settings.enable_group_limit
             and session not in data
             and len(data) >= self.settings.max_subscribe_sessions
         ):
+            logger.debug(
+                f"[涩批DEBUG] /订阅画师：会话 {session} 超出上限 "
+                f"{self.settings.max_subscribe_sessions}"
+            )
             yield event.plain_result("已达到会话订阅上限！")
             return
 
@@ -1005,10 +1204,15 @@ class spPlugin(
             self.settings.enable_group_limit
             and len(artists) >= self.settings.max_artists_per_session
         ):
+            logger.debug(
+                f"[涩批DEBUG] /订阅画师：会话 {session} 画师数 "
+                f"{len(artists)} 超出上限 {self.settings.max_artists_per_session}"
+            )
             yield event.plain_result("该会话已达到画师订阅上限！")
             return
 
         if artist_id in artists:
+            logger.debug(f"[涩批DEBUG] /订阅画师：画师 {artist_id} 已在会话 {session} 中")
             yield event.plain_result(f"已经订阅了{artist_id}")
             return
 
@@ -1016,6 +1220,7 @@ class spPlugin(
 
         artist = await self.pixiv.fetch_artist(artist_id)
         if not artist or artist.get("error"):
+            logger.warning(f"[涩批DEBUG] /订阅画师：画师 {artist_id} 不存在")
             yield event.plain_result("该画师id不存在")
             return
 
@@ -1031,6 +1236,9 @@ class spPlugin(
         artists[artist_id] = artist_name
         entry["umo"] = event.unified_msg_origin
         self.save_data(data)
+        logger.debug(
+            f"[涩批DEBUG] /订阅画师：会话 {session} 成功订阅 {artist_id}（{artist_name}）"
+        )
         yield event.plain_result(f"成功订阅画师{artist_id}（{artist_name}）")
 
     @filter.command("取消订阅", priority=20)
@@ -1043,6 +1251,7 @@ class spPlugin(
         if not artist_id:
             m = UNSUBSCRIBE_PAT.search(event.get_message_str())
             if not m:
+                logger.debug("[涩批DEBUG] /取消订阅：未能从消息中解析出画师ID")
                 yield event.plain_result("用法：/取消订阅 <画师ID>")
                 return
             artist_id = m.group(1) or ""
@@ -1050,10 +1259,16 @@ class spPlugin(
         data = self.load_data()
         entry = data.get(session)
         if not entry or artist_id not in (entry.get("artists") or {}):
+            logger.debug(
+                f"[涩批DEBUG] /取消订阅：会话 {session} 未订阅 {artist_id}"
+            )
             yield event.plain_result(f"还未订阅{artist_id}哦")
             return
         entry["artists"].pop(artist_id, None)
         self.save_data(data)
+        logger.debug(
+            f"[涩批DEBUG] /取消订阅：会话 {session} 成功取消订阅 {artist_id}"
+        )
         yield event.plain_result(f"成功取消订阅{artist_id}")
 
     @filter.command("订阅列表", priority=20)
@@ -1068,12 +1283,14 @@ class spPlugin(
         entry = data.get(session) or {}
         artists = entry.get("artists") or {}
         if not artists:
+            logger.debug(f"[涩批DEBUG] /订阅列表：会话 {session} 没有订阅任何画师")
             yield event.plain_result("当前没有订阅任何画师")
             return
         lines = ["订阅列表："]
         for artist_id, artist_name in artists.items():
             lines.append(f"{artist_name}  {artist_id}")
         lines.append(f"推送状态：{'已开启' if entry.get('pushEnabled') else '已关闭'}")
+        logger.debug(f"[涩批DEBUG] /订阅列表：会话 {session} 共 {len(artists)} 个画师")
         yield event.plain_result("\n".join(lines))
 
     @filter.command("sp推送", priority=20)
@@ -1087,11 +1304,13 @@ class spPlugin(
         data = self.load_data()
         entry = data.setdefault(session, {"pushEnabled": False, "artists": {}, "umo": ""})
         if entry.get("pushEnabled"):
+            logger.debug(f"[涩批DEBUG] /sp推送：会话 {session} 已开启推送")
             yield event.plain_result("已经开启了sp推送。")
             return
         entry["pushEnabled"] = True
         entry["umo"] = event.unified_msg_origin
         self.save_data(data)
+        logger.debug(f"[涩批DEBUG] /sp推送：会话 {session} 成功开启推送")
         yield event.plain_result("已开启sp推送。")
 
     @filter.command("关闭sp推送", priority=20)
@@ -1105,13 +1324,16 @@ class spPlugin(
         data = self.load_data()
         entry = data.get(session)
         if not entry:
+            logger.debug(f"[涩批DEBUG] /关闭sp推送：会话 {session} 没有订阅数据")
             yield event.plain_result("尚未开启sp推送，无需关闭。")
             return
         if not entry.get("pushEnabled"):
+            logger.debug(f"[涩批DEBUG] /关闭sp推送：会话 {session} 推送本就关闭")
             yield event.plain_result("尚未开启sp推送，无需关闭。")
             return
         entry["pushEnabled"] = False
         self.save_data(data)
+        logger.debug(f"[涩批DEBUG] /关闭sp推送：会话 {session} 成功关闭推送")
         yield event.plain_result("已关闭sp推送。")
 
     # ------------------------------------------------------------------ #
@@ -1153,12 +1375,18 @@ class spPlugin(
         base = self.settings.cos_api
         separator = "&" if "?" in base else "?"
         url = f"{base}{separator}category={category}"
+        logger.debug(f"[涩批DEBUG] _send_cos({command})：请求URL {url}")
 
         paths = await self._download_cos_images(url, prefix=category)
         if not paths:
+            logger.warning(f"[涩批DEBUG] _send_cos({command})：图片全部下载失败")
             yield event.plain_result("未能获取到图片，请稍后再试。")
             return
 
+        logger.debug(
+            f"[涩批DEBUG] _send_cos({command})：共 {len(paths)} 张图片，"
+            f"forward_as_node={self.settings.forward_as_node}"
+        )
         if self.settings.forward_as_node:
             nodes = self.image_nodes(event, paths)
             for batch in self.build_batches(nodes):
@@ -1179,19 +1407,32 @@ class spPlugin(
                         timeout=self.settings.download_timeout,
                         referer=self.settings.cos_api,
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.debug(
+                        f"[涩批DEBUG] _download_cos_images({prefix})："
+                        f"第 {index + 1}/{IMAGE_COUNT} 张下载失败：{exc!r}"
+                    )
                     return
                 if self.settings.track_pixel:
                     data = add_noise(data)
                 target = self.temp_path(f"{prefix}_{index}_{random.randint(1000, 9999)}.jpg")
                 try:
                     save_bytes(target, data)
-                except OSError:
+                except OSError as exc:
+                    logger.debug(
+                        f"[涩批DEBUG] _download_cos_images({prefix})："
+                        f"第 {index + 1}/{IMAGE_COUNT} 张保存失败：{exc!r}"
+                    )
                     return
                 results[index] = str(target)
 
         await asyncio.gather(*(worker(i) for i in range(IMAGE_COUNT)))
-        return [path for path in results if path]
+        paths = [path for path in results if path]
+        logger.debug(
+            f"[涩批DEBUG] _download_cos_images({prefix})："
+            f"成功 {len(paths)}/{IMAGE_COUNT} 张"
+        )
+        return paths
 
 
 __all__ = ["spPlugin"]

@@ -14,6 +14,15 @@ from .http import fetch_bytes
 from .imaging import guess_suffix, sha1_of
 
 
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 class FileCache:
     """基于 URL 哈希的两级缓存（内存 + 磁盘）。"""
 
@@ -61,6 +70,7 @@ class FileCache:
         """获取 URL 内容，命中缓存则直接返回。失败返回 None。"""
         key = sha1_of(url.encode("utf-8"))
         if use_memory and key in self._memory:
+            _dbg(f"filecache.get：内存缓存命中 {url[:80]}")
             return self._memory[key]
 
         # 命中检查：枚举已知后缀找磁盘文件
@@ -69,12 +79,14 @@ class FileCache:
             try:
                 if time.time() - path.stat().st_mtime <= self.max_age_seconds:
                     data = path.read_bytes()
+                    _dbg(f"filecache.get：磁盘缓存命中 {url[:80]} -> {path.name}")
                     if use_memory:
                         self._memory[key] = data
                     return data
             except OSError:
                 pass
 
+        _dbg(f"filecache.get：未命中，开始下载 {url[:80]}")
         async with self._lock_for(key):
             # 双重检查，避免同一 URL 并发重复下载
             path = self._find_disk_file(key)
@@ -88,14 +100,16 @@ class FileCache:
                     pass
             try:
                 data = await fetch_bytes(url, timeout=timeout, referer=referer)
-            except Exception:
+                _dbg(f"filecache.get：下载成功 {url[:80]} 共 {len(data)} 字节")
+            except Exception as exc:
+                _dbg(f"filecache.get：下载失败 {url[:80]}：{exc!r}")
                 return None
             suffix = guess_suffix(data)
             try:
                 target = self._path_for(key, suffix)
                 target.write_bytes(data)
-            except OSError:
-                pass
+            except OSError as exc:
+                _dbg(f"filecache.get：写盘失败 {url[:80]}：{exc!r}")
             if use_memory:
                 # 内存缓存限制在 64MB 左右，避免图片太多撑爆内存
                 if len(self._memory) > 64:

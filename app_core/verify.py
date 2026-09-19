@@ -15,6 +15,16 @@ from .browser import BrowserError, browser_context, goto
 from .http import HttpError, fetch_text
 from .settings import PluginSettings
 
+
+def _dbg(message: str) -> None:
+    """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
+    try:
+        from astrbot.api import logger # type: ignore
+        logger.debug(f"[涩批DEBUG] {message}")
+    except Exception:
+        pass
+
+
 API_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -73,24 +83,34 @@ async def fetch_magnet_info(
 ) -> MagnetInfo | None:
     """查询磁力详情，失败返回 None。"""
     url = build_magnet_url(settings, magnet)
+    _dbg(f"verify.fetch_magnet_info：GET {url[:120]}（timeout={timeout}s）")
 
     # 1) 先尝试直接 HTTP 请求（更快）
     try:
         text = await fetch_text(url, timeout=timeout, headers=API_HEADERS)
         payload = _try_parse(text)
         if payload:
+            _dbg(
+                f"verify.fetch_magnet_info：HTTP 直接命中，"
+                f"文件={payload.get('name')!r} 大小={payload.get('size')} "
+                f"截图数={len(payload.get('screenshots') or [])}"
+            )
             return MagnetInfo(payload)
-    except HttpError:
-        pass
+        _dbg("verify.fetch_magnet_info：HTTP 响应无有效 JSON，回退到 Playwright")
+    except HttpError as exc:
+        _dbg(f"verify.fetch_magnet_info：HTTP 请求失败 {exc}，回退到 Playwright")
 
     # 2) 回退到 Playwright（仅捕获浏览器相关错误；_fetch_with_browser
     # 内部已把 HTTP/JSON 解析等异常归一化为 BrowserError 或返回 None）
     try:
         payload = await _fetch_with_browser(url, timeout=timeout)
-    except BrowserError:
+    except BrowserError as exc:
+        _dbg(f"verify.fetch_magnet_info：Playwright 回退也失败 {exc}")
         payload = None
     if payload:
+        _dbg("verify.fetch_magnet_info：Playwright 命中")
         return MagnetInfo(payload)
+    _dbg("verify.fetch_magnet_info：两种方式均无结果，返回 None")
     return None
 
 
@@ -116,6 +136,7 @@ def _try_parse(text: str) -> dict | None:
 
 
 async def _fetch_with_browser(url: str, *, timeout: int = 40) -> dict | None:
+    _dbg(f"verify._fetch_with_browser：开始打开 {url[:120]}")
     async with browser_context(
         headless=True,
         extra_headers=API_HEADERS,
@@ -129,11 +150,15 @@ async def _fetch_with_browser(url: str, *, timeout: int = 40) -> dict | None:
             )
             payload = _try_parse(hidden or "")
             if payload:
+                _dbg("verify._fetch_with_browser：隐藏 div 命中")
                 return payload
         except Exception:
             pass
         try:
             body_text = await page.inner_text("body")
         except Exception:
+            _dbg("verify._fetch_with_browser：读取 body 文本失败")
             return None
-        return _try_parse(body_text)
+        payload = _try_parse(body_text)
+        _dbg(f"verify._fetch_with_browser：body 解析{'命中' if payload else '未命中'}")
+        return payload
