@@ -134,7 +134,7 @@ class HelpFeature(spFeature):
         """
         local = Path(self.paths.asset("help.jpg"))
         if local.exists():
-            logger.debug(f"[涩批DEBUG] _send_help_image：使用自带帮助图 {local}")
+            logger.info(f"[涩批DEBUG] _send_help_image：使用自带帮助图 {local}")
             yield event.image_result(str(local))
             return
 
@@ -142,7 +142,7 @@ class HelpFeature(spFeature):
         # 先做一次字体体检：缺中文字体且 assets/fonts 里有自带字体时，
         # 自动把字体安装到系统字体目录，再重试渲染一次（只重试一次，
         # 避免无限循环）。
-        logger.debug("[涩批DEBUG] _send_help_image：开始本地渲染帮助图")
+        logger.info("[涩批DEBUG] _send_help_image：开始本地渲染帮助图")
         try:
             out = self.temp_path(f"sp_help_{random.randint(1000, 9999)}.jpg")
             render_text_help_image(
@@ -152,7 +152,7 @@ class HelpFeature(spFeature):
                 out_path=out,
             )
             self._log_font_status()
-            logger.debug(f"[涩批DEBUG] _send_help_image：渲染成功 -> {out}")
+            logger.info(f"[涩批DEBUG] _send_help_image：渲染成功 -> {out}")
             yield event.image_result(str(out))
             return
         except Exception as exc:
@@ -163,13 +163,13 @@ class HelpFeature(spFeature):
         # 失败后：先诊断是否字体缺失，缺失则尝试自动修复并重试一次
         try:
             font_diag = diagnose_font_missing()
-            logger.debug(f"[涩批DEBUG] _send_help_image：字体诊断 {font_diag}")
+            logger.info(f"[涩批DEBUG] _send_help_image：字体诊断 {font_diag}")
             if font_diag["missing"]:
                 logger.info(
                     f"[涩批] 检测到中文字体缺失: {font_diag['suggestion']}"
                 )
                 fixed_diag = ensure_chinese_font()
-                logger.debug(f"[涩批DEBUG] _send_help_image：字体修复 {fixed_diag}")
+                logger.info(f"[涩批DEBUG] _send_help_image：字体修复 {fixed_diag}")
                 if not fixed_diag["missing"]:
                     logger.info(
                         "[涩批] 字体自动安装成功，重试渲染帮助图"
@@ -181,7 +181,7 @@ class HelpFeature(spFeature):
                         version=PLUGIN_VERSION,
                         out_path=out,
                     )
-                    logger.debug(f"[涩批DEBUG] _send_help_image：重试渲染成功 -> {out}")
+                    logger.info(f"[涩批DEBUG] _send_help_image：重试渲染成功 -> {out}")
                     yield event.image_result(str(out))
                     return
                 logger.warning(
@@ -192,7 +192,7 @@ class HelpFeature(spFeature):
             logger.warning(f"[涩批] 字体诊断/自动修复过程出错: {exc!r}")
 
         # 兜底：直接发文字版
-        logger.debug("[涩批DEBUG] _send_help_image：渲染失败，回退为纯文字帮助")
+        logger.info("[涩批DEBUG] _send_help_image：渲染失败，回退为纯文字帮助")
         yield event.plain_result(
             "未找到 assets/help.jpg，本地渲染也失败，已改为发送文字帮助"
             "（详见服务器日志）：\n\n"

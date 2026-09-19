@@ -38,7 +38,7 @@ def _dbg(message: str) -> None:
     """统一的控制台 debug 日志输出（失败静默，不影响主流程）。"""
     try:
         from astrbot.api import logger # type: ignore
-        logger.debug(f"[涩批DEBUG] {message}")
+        logger.info(f"[涩批DEBUG] {message}")
     except Exception:
         pass
 

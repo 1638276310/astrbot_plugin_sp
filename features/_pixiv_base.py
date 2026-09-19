@@ -30,7 +30,7 @@ class PixivBase(spFeature):
     prefix: str = "pixiv",
     ) -> list[str]:
         from astrbot.api import logger # type: ignore
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] pixiv.download_images：共 {len(urls)} 个URL，"
             f"prefix={prefix!r}，referer={referer!r}"
         )

@@ -80,13 +80,13 @@ class spFeature(MessageMixin, AdminMixin):
         这里按会话维度控制）。
         """
         if not self.settings.enable_id_whitelist:
-            logger.debug("[涩批DEBUG] guard：未启用白名单，直接放行")
+            logger.info("[涩批DEBUG] guard：未启用白名单，直接放行")
             return True
         if not self.settings.id_whitelist:
-            logger.debug("[涩批DEBUG] guard：白名单为空，直接放行")
+            logger.info("[涩批DEBUG] guard：白名单为空，直接放行")
             return True
         if self.whitelist_ok(event):
-            logger.debug("[涩批DEBUG] guard：白名单校验通过")
+            logger.info("[涩批DEBUG] guard：白名单校验通过")
             return True
         logger.warning(
             f"[涩批DEBUG] guard：白名单校验失败，群={event.get_group_id()!r} "
@@ -116,10 +116,10 @@ class spFeature(MessageMixin, AdminMixin):
         referer 用于部分图床的防盗链校验。
         """
         if not urls:
-            logger.debug(f"[涩批DEBUG] download_images({prefix})：URL列表为空")
+            logger.info(f"[涩批DEBUG] download_images({prefix})：URL列表为空")
             return []
 
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] download_images({prefix})：共 {len(urls)} 个URL，"
             f"并发上限 {self.settings.max_concurrent_download}，"
             f"timeout {self.settings.download_timeout}s"
@@ -135,7 +135,7 @@ class spFeature(MessageMixin, AdminMixin):
                     timeout=self.settings.download_timeout,
                 )
                 if not data:
-                    logger.debug(
+                    logger.info(
                         f"[涩批DEBUG] download_images({prefix})：第 {index + 1}/{len(urls)} 张下载失败：{url[:80]}"
                     )
                     return
@@ -147,7 +147,7 @@ class spFeature(MessageMixin, AdminMixin):
                 try:
                     save_bytes(target, data)
                 except OSError as exc:
-                    logger.debug(
+                    logger.info(
                         f"[涩批DEBUG] download_images({prefix})：第 {index + 1}/{len(urls)} 张保存失败：{exc!r}"
                     )
                     return
@@ -155,7 +155,7 @@ class spFeature(MessageMixin, AdminMixin):
 
         await asyncio.gather(*(worker(i, url) for i, url in enumerate(urls)))
         paths = [path for path in results if path]
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] download_images({prefix})：成功下载 {len(paths)}/{len(urls)} 张"
         )
         return paths

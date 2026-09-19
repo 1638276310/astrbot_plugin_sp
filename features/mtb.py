@@ -33,21 +33,21 @@ class MtbFeature(spFeature):
         data = load_json(self.paths.jg_urls_file, [])
         if isinstance(data, list):
             urls = [str(item) for item in data]
-            logger.debug(f"[涩批DEBUG] album_urls：读到 {len(urls)} 个套图URL")
+            logger.info(f"[涩批DEBUG] album_urls：读到 {len(urls)} 个套图URL")
             return urls
-        logger.debug("[涩批DEBUG] album_urls：文件不存在或损坏，返回空列表")
+        logger.info("[涩批DEBUG] album_urls：文件不存在或损坏，返回空列表")
         return []
 
     def save_album_urls(self, urls: list[str]) -> None:
         save_json(self.paths.jg_urls_file, urls)
-        logger.debug(f"[涩批DEBUG] save_album_urls：已保存 {len(urls)} 个套图URL")
+        logger.info(f"[涩批DEBUG] save_album_urls：已保存 {len(urls)} 个套图URL")
 
     # ------------------------------------------------------------------ #
     # 内部实现
     # ------------------------------------------------------------------ #
     async def _full_update(self, event: AstrMessageEvent):
         previous = self.album_urls()
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _full_update：全量更新开始，现有 {len(previous)} 个URL"
         )
         yield event.plain_result(
@@ -67,7 +67,7 @@ class MtbFeature(spFeature):
             yield event.plain_result("无法获取总页数，全量更新终止")
             return
         self.save_album_urls(urls)
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _full_update：全量更新完成，共 {len(urls)} 个URL "
             f"（原有 {len(previous)} 个）"
         )
@@ -77,7 +77,7 @@ class MtbFeature(spFeature):
 
     async def _send_album(self, event: AstrMessageEvent, url: str):
         """解析并分批发送套图。"""
-        logger.debug(f"[涩批DEBUG] _send_album：开始解析套图URL={url}")
+        logger.info(f"[涩批DEBUG] _send_album：开始解析套图URL={url}")
         try:
             detail = await fetch_album_detail(self.settings, url)
         except Exception as exc:
@@ -90,7 +90,7 @@ class MtbFeature(spFeature):
             yield event.plain_result("没有找到任何图片，请稍后再试。")
             return
 
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _send_album：套图URL={url} 共 {len(detail.image_urls)} 张图片，开始下载"
         )
         yield event.plain_result(
@@ -106,7 +106,7 @@ class MtbFeature(spFeature):
             yield event.plain_result("图片下载失败，请稍后再试。")
             return
 
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _send_album：套图URL={url} 成功下载 {len(paths)} 张，"
             f"forward_as_node={self.settings.forward_as_node}"
         )
@@ -114,7 +114,7 @@ class MtbFeature(spFeature):
             nodes = [self.merged_text_node(event, detail.header_lines())]
             nodes.extend(self.image_nodes(event, paths))
             batches = self.build_batches(nodes)
-            logger.debug(
+            logger.info(
                 f"[涩批DEBUG] _send_album：套图URL={url} 共 {len(batches)} 批"
             )
             for index, batch in enumerate(batches):

@@ -28,21 +28,21 @@ class MztFeature(spFeature):
         data = load_json(self.paths.mzt_ids_file, [])
         if isinstance(data, list):
             ids = [str(item) for item in data]
-            logger.debug(f"[涩批DEBUG] mzt_ids：读到 {len(ids)} 个ID")
+            logger.info(f"[涩批DEBUG] mzt_ids：读到 {len(ids)} 个ID")
             return ids
-        logger.debug("[涩批DEBUG] mzt_ids：文件不存在或损坏，返回空列表")
+        logger.info("[涩批DEBUG] mzt_ids：文件不存在或损坏，返回空列表")
         return []
 
     def save_mzt_ids(self, ids: list[str]) -> None:
         save_json(self.paths.mzt_ids_file, ids)
-        logger.debug(f"[涩批DEBUG] save_mzt_ids：已保存 {len(ids)} 个ID")
+        logger.info(f"[涩批DEBUG] save_mzt_ids：已保存 {len(ids)} 个ID")
 
     # ------------------------------------------------------------------ #
     # 内部实现
     # ------------------------------------------------------------------ #
     async def _send_mzt_album(self, event: AstrMessageEvent, article_id: str):
         """解析并发送一个写真页。"""
-        logger.debug(f"[涩批DEBUG] _send_mzt_album：开始解析文章ID={article_id}")
+        logger.info(f"[涩批DEBUG] _send_mzt_album：开始解析文章ID={article_id}")
         try:
             album = await fetch_album(self.settings, article_id)
         except Exception as exc:
@@ -57,7 +57,7 @@ class MztFeature(spFeature):
             yield event.plain_result("没有找到任何图片，请稍后再试。")
             return
 
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 共 {len(album.image_urls)} 张图片，开始下载"
         )
         paths = await self.download_images(
@@ -70,7 +70,7 @@ class MztFeature(spFeature):
             yield event.plain_result("图片下载失败，请稍后再试。")
             return
 
-        logger.debug(
+        logger.info(
             f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 成功下载 {len(paths)} 张，"
             f"forward_as_node={self.settings.forward_as_node}"
         )

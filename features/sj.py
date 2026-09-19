@@ -33,7 +33,7 @@ class VideoFeature(spFeature):
         data = load_json(self.paths.video_urls_file, [])
         if isinstance(data, list) and data:
             urls = [str(item) for item in data]
-            logger.debug(f"[涩批DEBUG] video_urls：从持久化文件读到 {len(urls)} 个直链")
+            logger.info(f"[涩批DEBUG] video_urls：从持久化文件读到 {len(urls)} 个直链")
             return urls
         # 兜底：尝试从 assets 资源目录读取
         asset_file = self.paths.asset("sp_video_urls.json")
@@ -41,17 +41,17 @@ class VideoFeature(spFeature):
             data = load_json(asset_file, [])
             if isinstance(data, list) and data:
                 urls = [str(item) for item in data]
-                logger.debug(
+                logger.info(
                     f"[涩批DEBUG] video_urls：从 assets 文件读到 {len(urls)} 个直链"
                 )
                 return urls
         # 兼容旧配置项兜底
         fallback = getattr(self.settings, "sp_video_urls", [])
-        logger.debug(f"[涩批DEBUG] video_urls：文件与 assets 均为空，使用配置项 {len(fallback)} 个")
+        logger.info(f"[涩批DEBUG] video_urls：文件与 assets 均为空，使用配置项 {len(fallback)} 个")
         return fallback
 
     def save_video_urls(self, urls: list[str]) -> bool:
         """保存视频列表到持久化目录。"""
         ok = save_json(self.paths.video_urls_file, urls)
-        logger.debug(f"[涩批DEBUG] save_video_urls：写入 {len(urls)} 个直链，结果 {ok}")
+        logger.info(f"[涩批DEBUG] save_video_urls：写入 {len(urls)} 个直链，结果 {ok}")
         return ok
