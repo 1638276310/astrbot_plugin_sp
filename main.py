@@ -914,40 +914,58 @@ class spPlugin(
 
         if not await self.require_admin(event):
             return
+        logger.info(f"[涩批DEBUG] /更新套图列表：进入函数，即将读取现有URL列表（{self.paths.jg_urls_file}）")
         existing = self.album_urls()
+        logger.info(f"[涩批DEBUG] /更新套图列表：读到 {len(existing)} 个现有URL")
         if not existing:
             logger.info("[涩批DEBUG] /更新套图列表：列表为空，转全量更新")
+            logger.info(f"[涩批DEBUG] /更新套图列表：yield 提示语：套图URL列表为空，自动转为全量更新...")
             yield event.plain_result("套图URL列表为空，自动转为全量更新...")
+            logger.info(f"[涩批DEBUG] /更新套图列表：提示语已发送，即将进入 _full_update")
             async for result in self._full_update(event):
+                logger.info(f"[涩批DEBUG] /更新套图列表：_full_update 产出一个结果，转发中")
                 yield result
+            logger.info(f"[涩批DEBUG] /更新套图列表：_full_update 全部完成，handler 结束")
             return
 
         logger.info(f"[涩批DEBUG] /更新套图列表：增量更新开始，现有 {len(existing)} 个")
+        logger.info(f"[涩批DEBUG] /更新套图列表：yield 提示语：开始增量更新套图URL列表（只采集最新页面）...")
         yield event.plain_result("开始增量更新套图URL列表（只采集最新页面）...")
+        logger.info(f"[涩批DEBUG] /更新套图列表：提示语已发送，即将调用 collect_album_urls（增量）")
         try:
             merged, total_pages = await collect_album_urls(
                 self.settings, existing=existing, incremental=True
             )
         except Exception as exc:
             logger.error(f"[涩批DEBUG] /更新套图列表：增量更新失败 {exc!r}")
+            logger.info(f"[涩批DEBUG] /更新套图列表：yield 提示语：增量更新失败")
             yield event.plain_result(f"增量更新失败: {exc}")
+            logger.info(f"[涩批DEBUG] /更新套图列表：已 yield 提示语（失败），handler 结束")
             return
+        logger.info(
+            f"[涩批DEBUG] /更新套图列表：collect_album_urls 返回，合并后共 {len(merged)} 个URL，总页数 {total_pages}"
+        )
 
         if total_pages is None:
             logger.warning("[涩批DEBUG] /更新套图列表：无法获取总页数，增量更新终止")
+            logger.info(f"[涩批DEBUG] /更新套图列表：yield 提示语：无法获取总页数，增量更新终止")
             yield event.plain_result("无法获取总页数，增量更新终止")
+            logger.info(f"[涩批DEBUG] /更新套图列表：已 yield 提示语（终止），handler 结束")
             return
 
         added = len(merged) - len(existing)
+        logger.info(f"[涩批DEBUG] /更新套图列表：即将保存套图URL列表（{len(merged)} 个）到 {self.paths.jg_urls_file}")
         self.save_album_urls(merged)
         logger.info(
             f"[涩批DEBUG] /更新套图列表：增量更新完成，新增 {max(0, added)} 个，"
             f"共 {len(merged)} 个"
         )
+        logger.info(f"[涩批DEBUG] /更新套图列表：yield 提示语：增量更新完成")
         yield event.plain_result(
             f"增量更新完成！本次新增 {max(0, added)} 个套图"
             f"（现有总计 {len(merged)} 个，原为 {len(existing)} 个）"
         )
+        logger.info(f"[涩批DEBUG] /更新套图列表：已 yield 提示语（完成），handler 结束")
 
     @filter.command("全量更新套图列表", priority=25)
     async def sp_mtb_full_update(self, event: AstrMessageEvent):
@@ -958,9 +976,11 @@ class spPlugin(
 
         if not await self.require_admin(event):
             return
-        logger.info("[涩批DEBUG] /全量更新套图列表：开始全量更新")
+        logger.info("[涩批DEBUG] /全量更新套图列表：进入函数，即将调用 _full_update")
         async for result in self._full_update(event):
+            logger.info(f"[涩批DEBUG] /全量更新套图列表：_full_update 产出一个结果，转发中")
             yield result
+        logger.info(f"[涩批DEBUG] /全量更新套图列表：_full_update 全部完成，handler 结束")
 
     # ------------------------------------------------------------------ #
     # 磁力（features/magnet.py）

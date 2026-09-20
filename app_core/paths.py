@@ -48,6 +48,10 @@ class PluginPaths:
         self.cache = self.root / "cache"
         self.assets = Path(__file__).resolve().parent.parent / "assets"
         _dbg(f"PluginPaths.__init__：root={self.root}, temp={self.temp}, cache={self.cache}")
+        # 持久化数据（套图URL列表）放在 AstrBot 主数据目录下，
+        # 避免随 ``data/plugin_data/<plugin>/`` 在卸载/重装时被删除
+        self.persistent_dir = self._resolve_persistent_dir()
+        _dbg(f"PluginPaths.__init__：persistent_dir={self.persistent_dir}")
         self._ensure()
 
     # ------------------------------------------------------------------ #
@@ -76,10 +80,32 @@ class PluginPaths:
         base = Path(env_root) if env_root else Path(os.getcwd())
         return base / "data" / "plugin_data" / self.plugin_name
 
+    def _resolve_persistent_dir(self) -> Path:
+        """套图URL等大体积数据的持久化目录。
+
+        放在 ``data/<plugin_name>/``（与 ``data/plugin_data/`` 平级），
+        不属于插件 data 目录，AstrBot 卸载/重装插件时不会被清除，
+        避免每次重装都要全量重新采集几万条套图 URL。
+        """
+        if get_astrbot_data_path is not None:
+            try:
+                base = Path(get_astrbot_data_path())
+                _dbg(f"PluginPaths._resolve_persistent_dir：使用 AstrBot data 目录 {base}")
+                return base / self.plugin_name
+            except Exception as exc:  # pragma: no cover
+                _dbg(f"PluginPaths._resolve_persistent_dir：get_astrbot_data_path 失败：{exc!r}")
+        # 兜底：AstrBot 根目录下的 data
+        env_root = os.environ.get("ASTRBOT_ROOT")
+        base = Path(env_root) if env_root else Path(os.getcwd())
+        persistent = base / "data" / self.plugin_name
+        _dbg(f"PluginPaths._resolve_persistent_dir：兜底使用 {persistent}")
+        return persistent
+
     def _ensure(self) -> None:
-        for path in (self.root, self.temp, self.cache):
+        for path in (self.root, self.temp, self.cache, self.persistent_dir):
             path.mkdir(parents=True, exist_ok=True)
         self.ensure_video_urls()
+        self.migrate_persistent_data()
         _dbg(f"PluginPaths._ensure：目录已就绪，temp 文件数 {len(list(self.temp.glob('*')))}")
 
     # ------------------------------------------------------------------ #
@@ -92,8 +118,37 @@ class PluginPaths:
 
     @property
     def jg_urls_file(self) -> Path:
-        """美图吧套图 URL 列表。"""
+        """美图吧套图 URL 列表（存放在持久化目录，避免随插件卸载被删除）。"""
+        return self.persistent_dir / "jg.json"
+
+    @property
+    def _legacy_jg_urls_file(self) -> Path:
+        """旧的套图 URL 列表位置（在插件 data 目录下，卸载会被删）。"""
         return self.root / "jg.json"
+
+    def migrate_persistent_data(self) -> None:
+        """把旧位置（插件 data 目录）的套图 URL 列表迁移到持久化目录。
+
+        只在持久化目录还没有文件、而旧位置存在文件时执行一次，
+        避免用户已经积累了几万条 URL 却因为路径变更而丢失。
+        """
+        persistent = self.jg_urls_file
+        legacy = self._legacy_jg_urls_file
+        if persistent.exists():
+            _dbg(f"PluginPaths.migrate_persistent_data：持久化目录已有 {persistent}，跳过迁移")
+            return
+        if not legacy.exists():
+            _dbg(f"PluginPaths.migrate_persistent_data：旧位置 {legacy} 不存在，无需迁移")
+            return
+        try:
+            persistent.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(legacy, persistent)
+            _dbg(
+                f"PluginPaths.migrate_persistent_data：已将 {legacy} 迁移到 {persistent}，"
+                f"大小 {persistent.stat().st_size} 字节"
+            )
+        except OSError as exc:
+            _dbg(f"PluginPaths.migrate_persistent_data：迁移失败：{exc!r}")
 
     @property
     def subscribe_file(self) -> Path:

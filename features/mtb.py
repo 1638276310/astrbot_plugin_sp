@@ -46,34 +46,47 @@ class MtbFeature(spFeature):
     # 内部实现
     # ------------------------------------------------------------------ #
     async def _full_update(self, event: AstrMessageEvent):
+        logger.info(f"[涩批DEBUG] _full_update：进入函数，即将读取现有URL列表")
         previous = self.album_urls()
         logger.info(
             f"[涩批DEBUG] _full_update：全量更新开始，现有 {len(previous)} 个URL"
         )
+        logger.info(f"[涩批DEBUG] _full_update：yield 提示语：开始全量更新套图URL列表...")
         yield event.plain_result(
             "开始全量更新套图URL列表（从第一页向最后一页顺序采集），"
             "这可能需要几分钟时间..."
         )
+        logger.info(f"[涩批DEBUG] _full_update：提示语已发送，即将调用 collect_album_urls（全量）")
         try:
             urls, total_pages = await collect_album_urls(
                 self.settings, existing=previous, incremental=False
             )
         except Exception as exc:
             logger.error(f"[涩批DEBUG] _full_update：全量更新失败 {exc!r}")
+            logger.info(f"[涩批DEBUG] _full_update：yield 提示语：全量更新失败")
             yield event.plain_result(f"全量更新失败: {exc}")
+            logger.info(f"[涩批DEBUG] _full_update：已 yield 提示语（失败），函数结束")
             return
+        logger.info(
+            f"[涩批DEBUG] _full_update：collect_album_urls 返回，共 {len(urls)} 个URL，总页数 {total_pages}"
+        )
         if total_pages is None:
             logger.warning("[涩批DEBUG] _full_update：无法获取总页数")
+            logger.info(f"[涩批DEBUG] _full_update：yield 提示语：无法获取总页数，全量更新终止")
             yield event.plain_result("无法获取总页数，全量更新终止")
+            logger.info(f"[涩批DEBUG] _full_update：已 yield 提示语（终止），函数结束")
             return
+        logger.info(f"[涩批DEBUG] _full_update：即将保存套图URL列表（{len(urls)} 个）到 {self.paths.jg_urls_file}")
         self.save_album_urls(urls)
         logger.info(
             f"[涩批DEBUG] _full_update：全量更新完成，共 {len(urls)} 个URL "
             f"（原有 {len(previous)} 个）"
         )
+        logger.info(f"[涩批DEBUG] _full_update：yield 提示语：全量更新完成")
         yield event.plain_result(
             f"全量更新完成！共获取 {len(urls)} 个套图URL (原有 {len(previous)} 个)"
         )
+        logger.info(f"[涩批DEBUG] _full_update：已 yield 提示语（完成），函数结束")
 
     async def _send_album(self, event: AstrMessageEvent, url: str):
         """解析并分批发送套图。"""
