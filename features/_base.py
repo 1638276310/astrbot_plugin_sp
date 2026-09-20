@@ -124,6 +124,9 @@ class spFeature(MessageMixin, AdminMixin):
             f"并发上限 {self.settings.max_concurrent_download}，"
             f"timeout {self.settings.download_timeout}s"
         )
+        logger.info(
+            f"[涩批DEBUG] download_images({prefix})：即将启动并发下载（{len(urls)} 张）"
+        )
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * len(urls)
 
@@ -153,9 +156,15 @@ class spFeature(MessageMixin, AdminMixin):
                     return
                 results[index] = str(target)
 
+        logger.info(
+            f"[涩批DEBUG] download_images({prefix})：等待所有下载完成（asyncio.gather）"
+        )
         await asyncio.gather(*(worker(i, url) for i, url in enumerate(urls)))
+        logger.info(
+            f"[涩批DEBUG] download_images({prefix})：并发下载全部结束"
+        )
         paths = [path for path in results if path]
         logger.info(
-            f"[涩批DEBUG] download_images({prefix})：成功下载 {len(paths)}/{len(urls)} 张"
+            f"[涩批DEBUG] download_images({prefix})：成功下载 {len(paths)}/{len(urls)} 张，即将返回路径列表"
         )
         return paths

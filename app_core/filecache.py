@@ -86,23 +86,26 @@ class FileCache:
             except OSError:
                 pass
 
-        _dbg(f"filecache.get：未命中，开始下载 {url[:80]}")
+        _dbg(f"filecache.get：未命中（内存+磁盘），开始下载 {url[:80]}（timeout={timeout}s, referer={referer!r}）")
         async with self._lock_for(key):
             # 双重检查，避免同一 URL 并发重复下载
             path = self._find_disk_file(key)
             if path is not None:
                 try:
                     data = path.read_bytes()
+                    _dbg(f"filecache.get：双重检查磁盘缓存命中 {url[:80]} -> {path.name}（{len(data)} 字节）")
                     if use_memory:
                         self._memory[key] = data
                     return data
-                except OSError:
+                except OSError as exc:
+                    _dbg(f"filecache.get：双重检查磁盘文件读取失败 {url[:80]}：{exc!r}")
                     pass
+            _dbg(f"filecache.get：即将调用 fetch_bytes 下载 {url[:80]}")
             try:
                 data = await fetch_bytes(url, timeout=timeout, referer=referer)
                 _dbg(f"filecache.get：下载成功 {url[:80]} 共 {len(data)} 字节")
             except Exception as exc:
-                _dbg(f"filecache.get：下载失败 {url[:80]}：{exc!r}")
+                _dbg(f"filecache.get：下载失败 {url[:80]}（timeout={timeout}s）：{exc!r}")
                 return None
             suffix = guess_suffix(data)
             try:

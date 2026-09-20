@@ -230,13 +230,17 @@ async def fetch_album_detail(
     publish_date = "未知时间"
     title = "未知标题"
 
+    _dbg(f"mtb.fetch_album_detail：即将启动浏览器上下文")
     async with browser_context(headless=True, timeout_ms=timeout * 1000) as (
         _browser,
         _context,
         page,
     ):
+        _dbg(f"mtb.fetch_album_detail：浏览器上下文已就绪，开始打开详情页 {url[:120]}")
         await goto(page, url, timeout_ms=timeout * 1000)
+        _dbg(f"mtb.fetch_album_detail：详情页已打开，开始提取机构/标题/时间")
 
+        _dbg(f"mtb.fetch_album_detail：开始读取机构信息")
         organization = await _read_organization(page) or organization
         _dbg(f"mtb.fetch_album_detail：机构={organization!r}")
         breadcrumb = await query_first_text(page, "div.position div.w1200", "")
@@ -249,11 +253,13 @@ async def fetch_album_detail(
                 title = parts[-1]
         _dbg(f"mtb.fetch_album_detail：标题={title!r} 发布时间={publish_date!r}")
 
+        _dbg(f"mtb.fetch_album_detail：开始读取总页数")
         total_pages = await _read_total_pages(page)
         total_pages = min(max(1, total_pages), settings.max_pages_per_album)
         _dbg(f"mtb.fetch_album_detail：详情页共 {total_pages} 页（上限 {settings.max_pages_per_album}）")
 
         for page_no in range(1, total_pages + 1):
+            _dbg(f"mtb.fetch_album_detail：进入第 {page_no}/{total_pages} 页解析")
             if page_no > 1:
                 try:
                     await goto(

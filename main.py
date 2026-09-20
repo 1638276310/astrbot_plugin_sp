@@ -869,9 +869,13 @@ class spPlugin(
         logger.info(
             f"[涩批DEBUG] /随机美图吧：共 {len(urls)} 个URL，随机取 {url}"
         )
+        logger.info(f"[涩批DEBUG] /随机美图吧：yield 提示语：正在随机抽取一套美图，请稍等...")
         yield event.plain_result("正在随机抽取一套美图，请稍等...")
+        logger.info(f"[涩批DEBUG] /随机美图吧：提示语已发送，即将进入 _send_album")
         async for result in self._send_album(event, url):
+            logger.info(f"[涩批DEBUG] /随机美图吧：_send_album 产出一个结果，转发中")
             yield result
+        logger.info(f"[涩批DEBUG] /随机美图吧：_send_album 全部完成，handler 结束")
 
     @filter.command("套图详情", priority=25)
     async def sp_mtb_detail(self, event: AstrMessageEvent, url: str = ""):
@@ -893,9 +897,13 @@ class spPlugin(
             yield event.plain_result("URL 格式不正确")
             return
         logger.info(f"[涩批DEBUG] /套图详情：解析URL成功 {url}")
+        logger.info(f"[涩批DEBUG] /套图详情：yield 提示语：正在解析套图，请稍等...")
         yield event.plain_result("正在解析套图，请稍等...")
+        logger.info(f"[涩批DEBUG] /套图详情：提示语已发送，即将进入 _send_album")
         async for result in self._send_album(event, parsed):
+            logger.info(f"[涩批DEBUG] /套图详情：_send_album 产出一个结果，转发中")
             yield result
+        logger.info(f"[涩批DEBUG] /套图详情：_send_album 全部完成，handler 结束")
 
     @filter.command("更新套图列表", priority=25)
     async def sp_mtb_incremental_update(self, event: AstrMessageEvent):

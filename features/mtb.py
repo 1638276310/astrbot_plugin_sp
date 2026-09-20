@@ -77,33 +77,44 @@ class MtbFeature(spFeature):
 
     async def _send_album(self, event: AstrMessageEvent, url: str):
         """解析并分批发送套图。"""
-        logger.info(f"[涩批DEBUG] _send_album：开始解析套图URL={url}")
+        logger.info(f"[涩批DEBUG] _send_album：进入函数 套图URL={url}")
+        logger.info(f"[涩批DEBUG] _send_album：即将调用 fetch_album_detail（{url}）")
         try:
             detail = await fetch_album_detail(self.settings, url)
         except Exception as exc:
             logger.error(f"[涩批DEBUG] _send_album：解析套图URL={url} 失败 {exc!r}")
+            logger.info(f"[涩批DEBUG] _send_album：yield plain_result：连接网页失败（{exc}）")
             yield event.plain_result(f"连接网页失败，请稍后再试（{exc}）")
+            logger.info(f"[涩批DEBUG] _send_album：已 yield plain_result（连接网页失败），函数结束")
             return
 
+        logger.info(f"[涩批DEBUG] _send_album：fetch_album_detail 返回，title={detail.title!r}")
         if not detail.image_urls:
             logger.warning(f"[涩批DEBUG] _send_album：套图URL={url} 没有图片")
+            logger.info(f"[涩批DEBUG] _send_album：yield plain_result：没有找到任何图片")
             yield event.plain_result("没有找到任何图片，请稍后再试。")
+            logger.info(f"[涩批DEBUG] _send_album：已 yield plain_result（没有图片），函数结束")
             return
 
         logger.info(
             f"[涩批DEBUG] _send_album：套图URL={url} 共 {len(detail.image_urls)} 张图片，开始下载"
         )
+        logger.info(f"[涩批DEBUG] _send_album：yield plain_result：共找到 {len(detail.image_urls)} 张图片，正在下载...")
         yield event.plain_result(
             f"共找到 {len(detail.image_urls)} 张图片，正在下载..."
         )
+        logger.info(f"[涩批DEBUG] _send_album：已 yield plain_result（正在下载），开始调用 download_images")
         paths = await self.download_images(
             detail.image_urls,
             referer=url,
             prefix="mtb",
         )
+        logger.info(f"[涩批DEBUG] _send_album：download_images 返回 {len(paths)} 张成功路径")
         if not paths:
             logger.warning(f"[涩批DEBUG] _send_album：套图URL={url} 图片全部下载失败")
+            logger.info(f"[涩批DEBUG] _send_album：yield plain_result：图片下载失败")
             yield event.plain_result("图片下载失败，请稍后再试。")
+            logger.info(f"[涩批DEBUG] _send_album：已 yield plain_result（下载失败），函数结束")
             return
 
         logger.info(
@@ -111,6 +122,7 @@ class MtbFeature(spFeature):
             f"forward_as_node={self.settings.forward_as_node}"
         )
         if self.settings.forward_as_node:
+            logger.info(f"[涩批DEBUG] _send_album：开始构造合并转发节点（{len(paths)} 张图）")
             nodes = [self.merged_text_node(event, detail.header_lines())]
             nodes.extend(self.image_nodes(event, paths))
             batches = self.build_batches(nodes)
@@ -119,14 +131,21 @@ class MtbFeature(spFeature):
             )
             for index, batch in enumerate(batches):
                 if index > 0:
+                    logger.info(f"[涩批DEBUG] _send_album：yield 分隔提示：第 {index + 1} 批（共 {len(batches)} 批）")
                     yield event.plain_result(
                         f"--- 第 {index + 1} 批图片 (共 {len(batches)} 批) ---"
                     )
+                    logger.info(f"[涩批DEBUG] _send_album：已 yield 分隔提示（第 {index + 1} 批）")
+                logger.info(f"[涩批DEBUG] _send_album：yield chain_result（合并转发第 {index + 1} 批，{len(batch)} 个节点）")
                 yield event.chain_result([self.wrap_nodes(batch)])
+                logger.info(f"[涩批DEBUG] _send_album：已 yield chain_result（合并转发第 {index + 1} 批）")
         else:
             from astrbot.api.message_components import Plain # type: ignore
 
+            logger.info(f"[涩批DEBUG] _send_album：yield chain_result（普通消息，{len(paths)} 张图）")
             yield event.chain_result(
                 [Plain(text="\n".join(detail.header_lines()))]
                 + self.image_chain(paths)
             )
+            logger.info(f"[涩批DEBUG] _send_album：已 yield chain_result（普通消息），函数结束")
+        logger.info(f"[涩批DEBUG] _send_album：函数正常结束")

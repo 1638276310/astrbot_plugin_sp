@@ -76,7 +76,9 @@ async def browser_context(
         f"browser_context：开始 headless={headless} timeout_ms={timeout_ms} "
         f"proxy={proxy!r}"
     )
+    _dbg("browser_context：检查 playwright 可用性")
     ensure_playwright()
+    _dbg("browser_context：即将启动 playwright")
     playwright = await async_playwright().start() # type: ignore
     _dbg("browser_context：playwright 已启动")
     launch_kwargs: dict[str, Any] = {
@@ -88,8 +90,9 @@ async def browser_context(
         launch_kwargs["proxy"] = {"server": proxy}
     browser = None
     try:
+        _dbg(f"browser_context：即将启动 chromium（args={launch_kwargs.get('args')}）")
         browser = await playwright.chromium.launch(**launch_kwargs)
-        _dbg("browser_context：chromium 已启动")
+        _dbg("browser_context：chromium 已启动，即将创建 context")
         context = await browser.new_context(
             user_agent=user_agent or random.choice(USER_AGENTS),
             extra_http_headers=extra_headers or {},
@@ -98,6 +101,7 @@ async def browser_context(
         )
         context.set_default_timeout(timeout_ms)
         context.set_default_navigation_timeout(timeout_ms)
+        _dbg("browser_context：context 已创建，即将创建 page")
         page = await context.new_page()
         _dbg("browser_context：浏览器上下文与页面已就绪")
         yield browser, context, page
@@ -121,12 +125,12 @@ async def goto(
     wait_until: str = "domcontentloaded",
 ) -> None:
     """打开页面，忽略等待策略上的兼容性差异。"""
-    _dbg(f"goto：打开 {url[:120]}... timeout_ms={timeout_ms}")
+    _dbg(f"goto：打开 {url[:120]}... timeout_ms={timeout_ms} wait_until={wait_until}")
     try:
         await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
         _dbg(f"goto：成功打开 {url[:120]}")
     except Exception as exc:
-        _dbg(f"goto：打开 {url[:120]} 失败：{exc!r}")
+        _dbg(f"goto：打开 {url[:120]} 失败（wait_until={wait_until}, timeout_ms={timeout_ms}）：{exc!r}")
         raise BrowserError(f"打开页面失败 {url}: {exc}") from exc
 
 
