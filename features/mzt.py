@@ -43,8 +43,11 @@ class MztFeature(spFeature):
     async def _send_mzt_album(self, event: AstrMessageEvent, article_id: str):
         """解析并发送一个写真页。"""
         logger.info(f"[涩批DEBUG] _send_mzt_album：开始解析文章ID={article_id}")
+        progress = self.make_console_progress(f"写真 {article_id}")
         try:
-            album = await fetch_album(self.settings, article_id)
+            album = await fetch_album(
+                self.settings, article_id, progress=progress["parse"]
+            )
         except Exception as exc:
             logger.error(
                 f"[涩批DEBUG] _send_mzt_album：解析文章ID={article_id} 失败：{exc!r}"
@@ -64,6 +67,7 @@ class MztFeature(spFeature):
             album.image_urls,
             referer=self.settings.mzt_site,
             prefix="mzt",
+            progress=progress["download"],
         )
         if not paths:
             logger.warning(f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 图片全部下载失败")

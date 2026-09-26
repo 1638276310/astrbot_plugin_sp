@@ -91,9 +91,12 @@ class MtbFeature(spFeature):
     async def _send_album(self, event: AstrMessageEvent, url: str):
         """解析并分批发送套图。"""
         logger.info(f"[涩批DEBUG] _send_album：进入函数 套图URL={url}")
+        progress = self.make_console_progress(f"美图吧 {url}")
         logger.info(f"[涩批DEBUG] _send_album：即将调用 fetch_album_detail（{url}）")
         try:
-            detail = await fetch_album_detail(self.settings, url)
+            detail = await fetch_album_detail(
+                self.settings, url, progress=progress["parse"]
+            )
         except Exception as exc:
             logger.error(f"[涩批DEBUG] _send_album：解析套图URL={url} 失败 {exc!r}")
             logger.info(f"[涩批DEBUG] _send_album：yield plain_result：连接网页失败（{exc}）")
@@ -121,6 +124,7 @@ class MtbFeature(spFeature):
             detail.image_urls,
             referer=url,
             prefix="mtb",
+            progress=progress["download"],
         )
         logger.info(f"[涩批DEBUG] _send_album：download_images 返回 {len(paths)} 张成功路径")
         if not paths:

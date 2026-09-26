@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import re
+from typing import Awaitable, Callable
 
 from .browser import (
     BrowserError,
@@ -71,15 +72,23 @@ def album_url(settings: PluginSettings, article_id: str | int) -> str:
     return f"{settings.mzt_site}/photo/{article_id}"
 
 
+# 进度回调类型别名：(阶段, 当前进度, 总数)，异步调用。
+ProgressCallback = Callable[[str, int, int], Awaitable[None]]
+
+
 async def fetch_album(
     settings: PluginSettings,
     article_id: str | int,
     *,
     timeout: int = 60,
+    progress: "ProgressCallback | None" = None,
 ) -> AlbumInfo:
     """解析单个写真页，最多收集 20 张图片。
 
     解析失败会抛出 BrowserError。
+    传入 ``progress`` 回调时，每次翻页收集后会调用一次
+    ``await progress("解析", 累计图片数, MAX_IMAGES)``，用于控制台实时
+    输出进度；不传则行为与原来完全一致。
     """
     base_url = album_url(settings, article_id)
     _dbg(f"mzt.fetch_album：开始解析 {base_url}（timeout={timeout}s）")
@@ -103,6 +112,11 @@ async def fetch_album(
 
         images = await _collect_images(page, seen, images)
         _dbg(f"mzt.fetch_album：第 1 页收集到 {len(images)} 张图片")
+        if progress is not None:
+            try:
+                await progress("解析", len(images), MAX_IMAGES)
+            except Exception:
+                _dbg("mzt.fetch_album：progress 回调执行异常（已忽略）")
         while len(images) < MAX_IMAGES:
             try:
                 next_button = await page.query_selector(NEXT_BUTTON)
@@ -118,6 +132,11 @@ async def fetch_album(
             await random_delay(600, 1400)
             images = await _collect_images(page, seen, images)
             _dbg(f"mzt.fetch_album：翻页后累计 {len(images)} 张图片")
+            if progress is not None:
+                try:
+                    await progress("解析", len(images), MAX_IMAGES)
+                except Exception:
+                    _dbg("mzt.fetch_album：progress 回调执行异常（已忽略）")
 
     if not title:
         title = "未知标题"

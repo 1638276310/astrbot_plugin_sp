@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import re
+from typing import Awaitable, Callable
 
 from .browser import (
     BrowserError,
@@ -69,6 +70,10 @@ class AlbumDetail:
 def parse_detail_url(text: str) -> str | None:
     match = DETAIL_URL_PATTERN.search((text or "").strip())
     return match.group(1) if match else None
+
+
+# 进度回调类型别名：(阶段, 当前进度, 总数)，异步调用。
+ProgressCallback = Callable[[str, int, int], Awaitable[None]]
 
 
 def list_url(settings: PluginSettings, page: int = 1) -> str:
@@ -221,8 +226,14 @@ async def fetch_album_detail(
     url: str,
     *,
     timeout: int = 60,
+    progress: "ProgressCallback | None" = None,
 ) -> AlbumDetail:
-    """解析套图详情页，收集全部图片地址。"""
+    """解析套图详情页，收集全部图片地址。
+
+    传入 ``progress`` 回调时，每解析完一页详情页会调用一次
+    ``await progress("解析", 累计图片数, 未知总数 or 0)``，用于控制台实时
+    输出进度；不传则行为与原来完全一致。
+    """
     _dbg(f"mtb.fetch_album_detail：开始解析 {url}（timeout={timeout}s）")
     image_urls: list[str] = []
     seen: set[str] = set()
@@ -286,6 +297,11 @@ async def fetch_album_detail(
                 f"mtb.fetch_album_detail：第 {page_no} 页新增 {new_count} 张，"
                 f"累计 {len(image_urls)} 张"
             )
+            if progress is not None:
+                try:
+                    await progress("解析", len(image_urls), 0)
+                except Exception:
+                    _dbg("mtb.fetch_album_detail：progress 回调执行异常（已忽略）")
             await random_delay(400, 900)
 
     _dbg(f"mtb.fetch_album_detail：解析完成，共 {len(image_urls)} 张图片")

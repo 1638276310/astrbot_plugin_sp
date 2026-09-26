@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from astrbot.api import logger # type: ignore
 
@@ -102,6 +102,39 @@ class spFeature(MessageMixin, AdminMixin):
         return False
 
     # ------------------------------------------------------------------ #
+    # 控制台实时进度（不向群里发消息）
+    # ------------------------------------------------------------------ #
+    def make_console_progress(self, label: str):
+        """返回一组异步进度回调，把进度打到控制台日志（不发群消息）。
+
+        用于套图"解析中 x/y 张"、"下载 x/y 张"这类场景：用户希望在
+        控制台实时看到当前进度，又不想让群里刷一堆进度消息。
+
+        返回一个 dict，包含两个可用的回调：
+
+        * ``parse``    —— 与 ``app_core.mtb.fetch_album_detail(progress=)``
+          及 ``app_core.mzt.fetch_album(progress=)`` 的签名一致：
+          ``await parse(阶段, 当前值, 总数)``，其中 阶段 固定为 "解析"。
+        * ``download`` —— 与 ``download_images(progress=)`` 的签名一致：
+          ``await download(已完成数, 总数)``。
+
+        ``label`` 一般传入套图/文章的简短标识（如套图标题），用于在日志
+        里区分并发时来自不同任务。
+        """
+        prefix = f"[涩批进度] {label}"
+
+        async def _parse(phase: str, current: int, total: int) -> None:
+            if total > 0:
+                logger.info(f"{prefix}：解析 {current}/{total} 张")
+            else:
+                logger.info(f"{prefix}：解析已 {current} 张")
+
+        async def _download(done: int, total: int) -> None:
+            logger.info(f"{prefix}：下载 {done}/{total} 张")
+
+        return {"parse": _parse, "download": _download}
+
+    # ------------------------------------------------------------------ #
     # 通用图片下载
     # ------------------------------------------------------------------ #
     async def download_images(
@@ -110,10 +143,14 @@ class spFeature(MessageMixin, AdminMixin):
         *,
         referer: str | None = None,
         prefix: str = "img",
+        progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> list[str]:
         """并发下载图片到临时目录，返回本地路径列表（失败项跳过）。
 
         referer 用于部分图床的防盗链校验。
+        传入 ``progress`` 回调时，每当下载进度跨过一个新的 10% 里程碑
+        （10%、20% ... 100%）时调用一次 ``await progress(已完成数, 总数)``，
+        用于控制台实时输出下载进度；不传则行为与原来完全一致。
         """
         if not urls:
             logger.info(f"[涩批DEBUG] download_images({prefix})：URL列表为空")
@@ -129,6 +166,30 @@ class spFeature(MessageMixin, AdminMixin):
         )
         semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
         results: list[str | None] = [None] * len(urls)
+        total = len(urls)
+        done_count = 0
+        last_milestone = 0
+        progress_lock = asyncio.Lock()
+
+        async def _on_done() -> None:
+            nonlocal done_count, last_milestone
+            should_report = False
+            async with progress_lock:
+                done_count += 1
+                if progress is not None and total > 0:
+                    # 每个 10% 里程碑报一次，避免并发下载时刷爆日志
+                    milestone = int(done_count / total * 10)
+                    if milestone > last_milestone:
+                        last_milestone = milestone
+                        should_report = True
+            if not should_report:
+                return
+            try:
+                await progress(done_count, total)
+            except Exception:
+                logger.info(
+                    f"[涩批DEBUG] download_images({prefix})：progress 回调执行异常（已忽略）"
+                )
 
         async def worker(index: int, url: str) -> None:
             async with semaphore:
@@ -141,6 +202,7 @@ class spFeature(MessageMixin, AdminMixin):
                     logger.info(
                         f"[涩批DEBUG] download_images({prefix})：第 {index + 1}/{len(urls)} 张下载失败：{url[:80]}"
                     )
+                    await _on_done()
                     return
                 if self.settings.track_pixel:
                     data = add_noise(data)
@@ -153,8 +215,10 @@ class spFeature(MessageMixin, AdminMixin):
                     logger.info(
                         f"[涩批DEBUG] download_images({prefix})：第 {index + 1}/{len(urls)} 张保存失败：{exc!r}"
                     )
+                    await _on_done()
                     return
                 results[index] = str(target)
+                await _on_done()
 
         logger.info(
             f"[涩批DEBUG] download_images({prefix})：等待所有下载完成（asyncio.gather）"
