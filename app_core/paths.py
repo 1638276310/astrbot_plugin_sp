@@ -48,8 +48,8 @@ class PluginPaths:
         self.cache = self.root / "cache"
         self.assets = Path(__file__).resolve().parent.parent / "assets"
         _dbg(f"PluginPaths.__init__：root={self.root}, temp={self.temp}, cache={self.cache}")
-        # 持久化数据（套图URL列表）放在 AstrBot 主数据目录下，
-        # 避免随 ``data/plugin_data/<plugin>/`` 在卸载/重装时被删除
+        # 持久化数据（套图URL列表）按 AstrBot 规范放在
+        # data/plugin_data/<plugin_name>/ 下，保证数据迁移与审计可追溯
         self.persistent_dir = self._resolve_persistent_dir()
         _dbg(f"PluginPaths.__init__：persistent_dir={self.persistent_dir}")
         self._ensure()
@@ -57,6 +57,24 @@ class PluginPaths:
     # ------------------------------------------------------------------ #
     # 目录解析
     # ------------------------------------------------------------------ #
+    def _resolve_data_root(self) -> Path:
+        """解析 AstrBot 的 ``data/`` 目录（不含 plugin_data）。
+
+        优先级：官方 ``get_astrbot_data_path`` → 环境变量 ``ASTRBOT_ROOT`` → 当前工作目录。
+        """
+        if get_astrbot_data_path is not None:
+            try:
+                base = Path(get_astrbot_data_path())
+                _dbg(f"PluginPaths._resolve_data_root：使用 AstrBot data 目录 {base}")
+                return base
+            except Exception as exc:  # pragma: no cover
+                _dbg(f"PluginPaths._resolve_data_root：get_astrbot_data_path 失败：{exc!r}")
+        # 兜底：AstrBot 根目录下的 data
+        env_root = os.environ.get("ASTRBOT_ROOT")
+        base = Path(env_root) if env_root else Path(os.getcwd())
+        _dbg(f"PluginPaths._resolve_data_root：兜底使用 {base / 'data'}")
+        return base / "data"
+
     def _resolve_root(self) -> Path:
         # 首选：AstrBot 官方 StarTools（get_px 同款路径，插件数据规范位置）
         try:
@@ -70,36 +88,24 @@ class PluginPaths:
                 return Path(get_astrbot_plugin_data_path())
             except Exception:  # pragma: no cover
                 pass
-        if get_astrbot_data_path is not None:
-            try:
-                return Path(get_astrbot_data_path()) / "plugin_data"
-            except Exception:  # pragma: no cover
-                pass
-        # 兜底：AstrBot 根目录下的 data/plugin_data
-        env_root = os.environ.get("ASTRBOT_ROOT")
-        base = Path(env_root) if env_root else Path(os.getcwd())
-        return base / "data" / "plugin_data" / self.plugin_name
+        # 兜底：data/plugin_data/<plugin_name>（与官方规范一致）
+        return self._resolve_data_root() / "plugin_data" / self.plugin_name
 
     def _resolve_persistent_dir(self) -> Path:
-        """套图URL等大体积数据的持久化目录。
+        """套图URL列表等大体积数据的持久化目录。
 
-        放在 ``data/<plugin_name>/``（与 ``data/plugin_data/`` 平级），
-        不属于插件 data 目录，AstrBot 卸载/重装插件时不会被清除，
-        避免每次重装都要全量重新采集几万条套图 URL。
+        按 AstrBot 插件存储规范，统一放在 ``data/plugin_data/<plugin_name>/`` 下，
+        保证用户数据迁移与审计时不会被遗漏。
         """
-        if get_astrbot_data_path is not None:
-            try:
-                base = Path(get_astrbot_data_path())
-                _dbg(f"PluginPaths._resolve_persistent_dir：使用 AstrBot data 目录 {base}")
-                return base / self.plugin_name
-            except Exception as exc:  # pragma: no cover
-                _dbg(f"PluginPaths._resolve_persistent_dir：get_astrbot_data_path 失败：{exc!r}")
-        # 兜底：AstrBot 根目录下的 data
-        env_root = os.environ.get("ASTRBOT_ROOT")
-        base = Path(env_root) if env_root else Path(os.getcwd())
-        persistent = base / "data" / self.plugin_name
-        _dbg(f"PluginPaths._resolve_persistent_dir：兜底使用 {persistent}")
-        return persistent
+        return self._resolve_data_root() / "plugin_data" / self.plugin_name
+
+    def _legacy_persistent_dir(self) -> Path:
+        """旧版本的非规范持久化目录（``data/<plugin_name>/``，与 plugin_data 平级）。
+
+        历史版本曾把套图URL列表写到该位置，这里仅用于一次性迁移，
+        新数据一律写入规范位置。
+        """
+        return self._resolve_data_root() / self.plugin_name
 
     def _ensure(self) -> None:
         for path in (self.root, self.temp, self.cache, self.persistent_dir):
@@ -118,33 +124,40 @@ class PluginPaths:
 
     @property
     def jg_urls_file(self) -> Path:
-        """美图吧套图 URL 列表（存放在持久化目录，避免随插件卸载被删除）。"""
+        """美图吧套图 URL 列表（规范位置：data/plugin_data/<plugin_name>/jg.json）。"""
         return self.persistent_dir / "jg.json"
 
     @property
     def _legacy_jg_urls_file(self) -> Path:
-        """旧的套图 URL 列表位置（在插件 data 目录下，卸载会被删）。"""
+        """历史遗留位置：旧版曾写在 data/<plugin_name>/jg.json（非规范目录）。"""
+        return self._legacy_persistent_dir() / "jg.json"
+
+    @property
+    def _legacy_jg_urls_file_root(self) -> Path:
+        """旧版曾把 jg.json 直接放在插件 data 目录（root）下。"""
         return self.root / "jg.json"
 
     def migrate_persistent_data(self) -> None:
-        """把旧位置（插件 data 目录）的套图 URL 列表迁移到持久化目录。
+        """把历史遗留位置（旧持久化目录 data/<plugin_name>/、旧插件 data 目录）
+        的套图 URL 列表迁移到规范位置 data/plugin_data/<plugin_name>/。
 
-        只在持久化目录还没有文件、而旧位置存在文件时执行一次，
-        避免用户已经积累了几万条 URL 却因为路径变更而丢失。
+        只在规范位置还没有文件时执行一次，避免用户已经积累了几万条 URL
+        却因为路径变更而丢失；多个遗留位置同时存在时，优先取修改时间较新的。
         """
         persistent = self.jg_urls_file
-        legacy = self._legacy_jg_urls_file
         if persistent.exists():
-            _dbg(f"PluginPaths.migrate_persistent_data：持久化目录已有 {persistent}，跳过迁移")
+            _dbg(f"PluginPaths.migrate_persistent_data：规范位置已有 {persistent}，跳过迁移")
             return
-        if not legacy.exists():
-            _dbg(f"PluginPaths.migrate_persistent_data：旧位置 {legacy} 不存在，无需迁移")
+        candidates = [p for p in (self._legacy_jg_urls_file, self._legacy_jg_urls_file_root) if p.exists()]
+        if not candidates:
+            _dbg("PluginPaths.migrate_persistent_data：无遗留文件，无需迁移")
             return
+        source = max(candidates, key=lambda p: p.stat().st_mtime)
         try:
             persistent.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(legacy, persistent)
+            shutil.copyfile(source, persistent)
             _dbg(
-                f"PluginPaths.migrate_persistent_data：已将 {legacy} 迁移到 {persistent}，"
+                f"PluginPaths.migrate_persistent_data：已将 {source} 迁移到 {persistent}，"
                 f"大小 {persistent.stat().st_size} 字节"
             )
         except OSError as exc:
