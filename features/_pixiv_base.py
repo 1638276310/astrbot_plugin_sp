@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Awaitable, Callable
+
 from astrbot.api.event import AstrMessageEvent # type: ignore
 
 from ._base import spFeature
 from ..app_core.pixiv import PixivClient
+
+# 下载进度回调：download_images 每完成若干张时调用一次 await progress(已完成, 总数)
+ProgressCallback = Callable[[int, int], Awaitable[None]]
 
 
 class PixivBase(spFeature):
@@ -23,20 +28,30 @@ class PixivBase(spFeature):
     # 图片下载
     # ------------------------------------------------------------------ #
     async def download_images(
-    self,
-    urls: list[str],
-    *,
-    referer: str | None = None,
-    prefix: str = "pixiv",
+        self,
+        urls: list[str],
+        *,
+        referer: str | None = None,
+        prefix: str = "pixiv",
+        progress: ProgressCallback | None = None,
     ) -> list[str]:
+        """P 站图片下载（在基类实现之上补一行日志）。
+
+        注意：在 ``spPlugin`` 的 MRO 里 ``PixivBase`` 排在 ``spFeature``
+        之前，所以这个方法会覆盖 ``spFeature.download_images``——参数签名
+        必须和基类保持同步（尤其是 ``progress``），并原样透传给
+        ``super().download_images``。否则 MtbFeature / MztFeature 里
+        ``download_images(..., progress=...)`` 的调用会抛
+        ``TypeError: got an unexpected keyword argument 'progress'``。
+        """
         from astrbot.api import logger # type: ignore
         logger.info(
             f"[涩批DEBUG] pixiv.download_images：共 {len(urls)} 个URL，"
             f"prefix={prefix!r}，referer={referer!r}"
         )
         return await super().download_images(
-        urls, referer=referer, prefix=prefix
-    )
+            urls, referer=referer, prefix=prefix, progress=progress
+        )
 
     @staticmethod
     def work_text(body: dict) -> str:
