@@ -242,6 +242,13 @@ class spPlugin(
     # ================================================================== #
     # 指令 handler（与 get_px 同构：全部挂在主类上，不用 Mixin 继承）
     # 业务方法继续委托 features/ 下 Mixin 的实现
+    #
+    # ⚠️ handler 入口一律调用 self.mark_event_consumed(event)，
+    #    绝对不要在这里调用 event.stop_event()：AstrBot 的调度器在
+    #    handler 每次 yield 之后都会检查事件是否已停止，一旦停止就会
+    #    放弃这个 handler 生成器，导致"先回提示、再发图片"的多段回复
+    #    只发出第一段（详见 features/_base.py 中 mark_event_consumed 的
+    #    说明）。需要停止事件时只能放在所有 yield 完成之后。
     # ================================================================== #
 
     # ------------------------------------------------------------------ #
@@ -254,7 +261,7 @@ class spPlugin(
     )
     async def sp_help(self, event: AstrMessageEvent):
         """涩批插件帮助（文字版 / 图片版）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -274,7 +281,7 @@ class spPlugin(
     )
     async def sp_help_image(self, event: AstrMessageEvent):
         """涩批插件帮助（图片版）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
         logger.info("[涩批DEBUG] /涩批图片帮助：开始渲染/发送帮助图")
@@ -301,7 +308,7 @@ class spPlugin(
     )
     async def sp_toggle_recall(self, event: AstrMessageEvent):
         """开启/关闭涩批消息撤回（/开启sp撤回 / /关闭sp撤回）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -327,7 +334,7 @@ class spPlugin(
     )
     async def sp_set_recall_time(self, event: AstrMessageEvent, seconds: int = 0):
         """设置涩批消息撤回时间（10-120 秒）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -357,7 +364,7 @@ class spPlugin(
     )
     async def sp_set_r18_mode(self, event: AstrMessageEvent, mode: int = -1):
         """设置 R18 模式（0 全部 / 1 非R18 / 2 R18）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -388,7 +395,7 @@ class spPlugin(
     @filter.command("设置图片偏好", priority=40)
     async def sp_set_image_preference(self, event: AstrMessageEvent, pref: int = -1):
         """设置图片偏好（0 无偏好 / 1 男性 / 2 女性）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -418,7 +425,7 @@ class spPlugin(
     @filter.command("sp状态", priority=40)
     async def sp_status(self, event: AstrMessageEvent):
         """查看涩批插件运行状态"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -451,7 +458,7 @@ class spPlugin(
     )
     async def sp_send_urls(self, event: AstrMessageEvent):
         """获取各类网站地址（写真/福利/吃瓜/导航/福利App/TG电报）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -508,7 +515,7 @@ class spPlugin(
     @filter.command("骚鸡", alias={"烧鸡", "sj"}, priority=20)
     async def sp_random_video(self, event: AstrMessageEvent):
         """随机发送一个涩批视频"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -560,7 +567,7 @@ class spPlugin(
     @filter.command("pid", priority=20)
     async def sp_pixiv_pid(self, event: AstrMessageEvent, pid: str = ""):
         """按 PID 获取 P 站作品（/pid <数字>）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -613,7 +620,7 @@ class spPlugin(
     @filter.command("随机", priority=20)
     async def sp_pixiv_random_artist(self, event: AstrMessageEvent):
         """随机获取画师作品（/随机 X 张 Y 作品，X ≤ 20）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -698,7 +705,7 @@ class spPlugin(
     @filter.command("来图", priority=20)
     async def sp_pixiv_tag(self, event: AstrMessageEvent):
         """按标签搜索 P 站图片（/来图 X 张 XX图，X ≤ 60）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -779,7 +786,7 @@ class spPlugin(
     @filter.command("写真馆", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
         """获取妹子图写真（/写真馆 <ID>）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -799,7 +806,7 @@ class spPlugin(
         优先级高于 "随机"（priority=20），消除两个指令的前缀冲突：
         AstrBot 对前缀匹配时，优先级高的 handler 先命中。
         """
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -817,7 +824,7 @@ class spPlugin(
     @filter.command("更新写真ID", alias={"更新写真id"}, priority=20)
     async def sp_mzt_update_ids(self, event: AstrMessageEvent):
         """增量更新写真ID列表（仅主人可用）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -856,7 +863,7 @@ class spPlugin(
     @filter.command("随机美图吧", priority=25)
     async def sp_mtb_random(self, event: AstrMessageEvent):
         """随机解析一套美图吧套图（/随机美图吧）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -880,7 +887,7 @@ class spPlugin(
     @filter.command("套图详情", priority=25)
     async def sp_mtb_detail(self, event: AstrMessageEvent, url: str = ""):
         """解析指定美图吧套图链接（/套图详情 <URL>）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -908,7 +915,7 @@ class spPlugin(
     @filter.command("更新套图列表", priority=25)
     async def sp_mtb_incremental_update(self, event: AstrMessageEvent):
         """增量更新套图列表（仅主人可用）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -970,7 +977,7 @@ class spPlugin(
     @filter.command("全量更新套图列表", priority=25)
     async def sp_mtb_full_update(self, event: AstrMessageEvent):
         """全量更新套图列表（仅主人可用）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -988,7 +995,7 @@ class spPlugin(
     @filter.command("验车", priority=20)
     async def sp_verify_magnet(self, event: AstrMessageEvent, magnet: str = ""):
         """查询磁力链接详情（/验车 magnet:...）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1106,7 +1113,7 @@ class spPlugin(
         count: int = 10,
     ):
         """磁力猫搜索（/磁力猫 关键词 [类型] [排序] [数量]）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1172,7 +1179,7 @@ class spPlugin(
     @filter.command("2图", priority=60)
     async def sp_cos_images(self, event: AstrMessageEvent):
         """获取二次元图包（/2图）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
         logger.info(f"[涩批DEBUG] /2图：开始获取二次元图包")
@@ -1182,7 +1189,7 @@ class spPlugin(
     @filter.command("3图", priority=60)
     async def sp_cos_images_3d(self, event: AstrMessageEvent):
         """获取三次元/现实图包（/3图）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
         logger.info(f"[涩批DEBUG] /3图：开始获取现实图包")
@@ -1195,7 +1202,7 @@ class spPlugin(
     @filter.command("订阅画师", priority=20)
     async def sp_subscribe(self, event: AstrMessageEvent, artist_id: str = ""):
         """订阅画师更新（/订阅画师 <ID>）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1272,7 +1279,7 @@ class spPlugin(
     @filter.command("取消订阅", priority=20)
     async def sp_unsubscribe(self, event: AstrMessageEvent, artist_id: str = ""):
         """取消订阅画师（/取消订阅 <ID>）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1302,7 +1309,7 @@ class spPlugin(
     @filter.command("订阅列表", priority=20)
     async def sp_subscribe_list(self, event: AstrMessageEvent):
         """查看本会话已订阅的画师（/订阅列表）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1324,7 +1331,7 @@ class spPlugin(
     @filter.command("sp推送", priority=20)
     async def sp_enable_push(self, event: AstrMessageEvent):
         """开启画师更新推送（/sp推送）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
@@ -1344,7 +1351,7 @@ class spPlugin(
     @filter.command("关闭sp推送", priority=20)
     async def sp_disable_push(self, event: AstrMessageEvent):
         """关闭画师更新推送（/关闭sp推送）"""
-        self.stop_event_if_needed(event)
+        self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 

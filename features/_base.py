@@ -48,26 +48,46 @@ class spFeature(MessageMixin, AdminMixin):
         return cache
 
     @staticmethod
-    def stop_event_if_needed(event) -> None:
-        """命中指令后立刻停止事件。
+    def mark_event_consumed(event) -> None:
+        """标记事件已被本插件处理，阻止它落到默认的 LLM 回复。
 
-        AstrBot 中，一个 handler 若没有调用 ``stop_event()``，事件会继续
-        流转到后续的 handler；当没有任何 handler 拦截时，消息最终会被
-        默认的 LLM / 聊天回复接管。get_px 等插件的所有指令 handler 都
-        在入口处调用 ``event.stop_event()``，本插件的 Mixin 指令统一
-        通过这个入口做同样的事，保证指令被自己消费、不会"漏"给 LLM。
+        **不要**在 handler 入口调用 ``event.stop_event()``。AstrBot 的
+        调度器（``PipelineScheduler._process_stages``）在 handler 每次
+        ``yield`` 之后都会检查 ``event.is_stopped()``；一旦事件已被停止，
+        它就会放弃当前阶段的异步生成器（handler），不再恢复执行。于是
+        "先 yield 一句提示、再解析/下载图片"这种多段回复只会发出第一段，
+        后面的 yield 全部丢失，日志也停在第一次 yield 之后——表现就是
+        "机器人回了一句'请稍等'，然后永远没有后文"。
 
-        同时打印一行命中日志，便于在服务器日志里确认指令是否被
-        本插件接住（28 个 handler 全部经过此入口）。
+        本插件原先在每个 handler 入口调用 ``event.stop_event()``，导致
+        /随机美图吧、/套图详情、/pid、/来图、/随机写真 等所有带多次
+        yield 的指令都被截断。现在改为只设置 ``event.call_llm = True``：
+        AstrBot 的 ProcessStage 会据此跳过默认 LLM 请求，指令仍由本插件
+        消费，而 handler 里的每个 ``yield`` 都能正常发送。
+
+        如果确实需要停止事件传播，只能在 handler 的所有 yield 都结束
+        之后再调用 ``event.stop_event()``。
         """
         try:
             logger.info(f"[涩批] 命中指令：{event.get_message_str()!r}")
         except Exception:
             pass
         try:
-            event.stop_event()
+            # AstrBot 的 ProcessStage 用 ``not event.call_llm`` 判断是否
+            # 还要走默认 LLM；置 True 即表示本插件已处理完这条消息。
+            event.call_llm = True
         except Exception:
             pass
+
+    @staticmethod
+    def stop_event_if_needed(event) -> None:
+        """已废弃：保留旧名字仅为兼容旧版 ``main.py``。
+
+        旧版 ``main.py`` 会在 handler 入口调用本方法；它现在等价于
+        :meth:`mark_event_consumed`，只做标记、不再停止事件，避免旧文件
+        与新 ``features/_base.py`` 混搭时再次出现"只发第一句"的问题。
+        """
+        spFeature.mark_event_consumed(event)
 
     # ------------------------------------------------------------------ #
     # 访问控制
