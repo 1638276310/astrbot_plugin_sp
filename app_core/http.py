@@ -95,7 +95,17 @@ async def fetch_bytes(
                 if resp.status != 200:
                     _dbg(f"fetch_bytes：{url[:120]} 返回 HTTP {resp.status}")
                     raise HttpError(f"HTTP {resp.status}", resp.status)
-                body = await resp.content.read(max_size)
+                # 注意：StreamReader.read(n) 只是"最多读 n 字节"，缓冲区一有
+                # 数据就会提前返回，图片会被截断（表现为只加载出上面一小截）。
+                # 必须循环读到 EOF。
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in resp.content.iter_chunked(64 * 1024):
+                    total += len(chunk)
+                    if total > max_size:
+                        raise HttpError(f"内容超过大小上限 {max_size} 字节")
+                    chunks.append(chunk)
+                body = b"".join(chunks)
                 _dbg(f"fetch_bytes：{url[:120]} 成功，共 {len(body)} 字节")
                 return body
     except aiohttp.ClientError as exc:

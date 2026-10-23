@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 from astrbot.api import logger # type: ignore
 
 from ..app_core.filecache import FileCache
-from ..app_core.imaging import add_noise, save_bytes
+from ..app_core.imaging import add_noise, save_bytes, shrink_for_send
 from ..app_core.message import AdminMixin, MessageMixin
 from ..app_core.paths import PluginPaths
 from ..app_core.settings import PluginSettings
@@ -224,8 +224,13 @@ class spFeature(MessageMixin, AdminMixin):
                     )
                     await _on_done()
                     return
+                # 发送前统一压缩：长边 1280、JPEG 质量 80。肉眼几乎无感，
+                # 但能把体积降一个数量级，避免几十张图打进合并转发时
+                # 超过 OneBot WebSocket 的负载上限导致连接被断开。
+                data = shrink_for_send(data)
                 if self.settings.track_pixel:
-                    data = add_noise(data)
+                    # 已经压缩过，这里只加噪点、不再缩放（max_side=0）。
+                    data = add_noise(data, max_side=0)
                 target = self.temp_path(
                     f"{prefix}_{index}_{random.randint(1000, 9999)}.jpg"
                 )
