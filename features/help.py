@@ -1,12 +1,9 @@
 """功能：涩批帮助。
 
-原 ``help.js``：
-
 * ``/涩批文字帮助`` 等 —— 发送文字版使用说明
-* ``/涩批图片帮助`` 等 —— 发送帮助图。优先用插件自带的
-  ``assets/help.jpg``；若该文件不存在，则**本地**用 Pillow 把最新帮助
-  文本即时渲染成一张长图（不依赖外部截图服务），渲染失败再回退到纯
-  文字版。
+* ``/涩批图片帮助`` 等 —— 发送帮助图。直接发送插件自带的
+  ``assets/help.png``（新版暗黑风长图）；若该文件不存在，则本地用
+  Pillow 把最新帮助文本渲染成兜底长图，再失败则回退到纯文字版。
 """
 
 from __future__ import annotations
@@ -126,19 +123,18 @@ class HelpFeature(spFeature):
     """帮助相关业务方法（指令 handler 由主类 main.py 注册）。"""
 
     async def _send_help_image(self, event: AstrMessageEvent):
-        """优先发送插件自带帮助图，缺失时本地用 Pillow 即时渲染。
+        """优先发送插件自带的 assets/help.png，缺失时本地用 Pillow 即时渲染。
 
-        渲染不依赖任何外部服务（不抓截图、不下载文生图），每次都会按
-        最新的帮助文本重新生成一张长图，保证与 ``build_help_text`` 内容
-        始终一致。渲染失败时回退为纯文字版。
+        直接发送静态帮助图，不启动浏览器、不抓取任何外部服务；只有图片
+        缺失时才走本地 Pillow 兜底，仍失败则回退为文字版。
         """
-        local = Path(self.paths.asset("help.jpg"))
+        local = Path(self.paths.asset("help.png"))
         if local.exists():
             logger.info(f"[涩批DEBUG] _send_help_image：使用自带帮助图 {local}")
             yield event.image_result(str(local))
             return
 
-        # 本地即时渲染（每次调用都是新图，不缓存，随文本内容自动更新）
+        # 本地即时渲染兜底（每次调用都是新图，随文本内容自动更新）
         # 先做一次字体体检：缺中文字体且 assets/fonts 里有自带字体时，
         # 自动把字体安装到系统字体目录，再重试渲染一次（只重试一次，
         # 避免无限循环）。
@@ -194,7 +190,7 @@ class HelpFeature(spFeature):
         # 兜底：直接发文字版
         logger.info("[涩批DEBUG] _send_help_image：渲染失败，回退为纯文字帮助")
         yield event.plain_result(
-            "未找到 assets/help.jpg，本地渲染也失败，已改为发送文字帮助"
+            "未找到 assets/help.png，本地渲染也失败，已改为发送文字帮助"
             "（详见服务器日志）：\n\n"
             + build_help_text()
         )

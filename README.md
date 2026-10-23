@@ -21,7 +21,8 @@
 ├── requirements.txt              # 依赖
 ├── README.md
 ├── assets/
-│   └── 说明.txt                  # 放 help.jpg 即可使用 /涩批图片帮助
+│   ├── help.png                  # /涩批图片帮助 发送的新版完整帮助长图
+│   └── 说明.txt                  # 帮助图说明
 ├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
 │   ├── settings.py               # 配置读取 + 上游接口与常量
@@ -94,10 +95,15 @@ playwright install chromium
 
 打开 AstrBot WebUI → 插件管理 → 找到「涩批」→ 点击重载。
 
-### 5. 可选：放帮助图
+### 5. 帮助图
 
-把原插件的 `config/help.jpg` 复制成 `assets/help.jpg`，
-这样 `/涩批图片帮助` 会直接发这张图；不放则会自动用 HTML 渲染文字帮助图。
+`/涩批图片帮助` 直接发送插件自带的 `assets/help.png`：
+
+- 1200px 宽、暗黑赛博朋克 + 玻璃拟态、双栏 masonry 长图；
+- 命令较少的分类会紧接下一张卡片，不留大块空白；
+- 想替换时保持文件名为 `help.png` 覆盖即可，不需要改代码。
+
+如果 `help.png` 缺失，插件会自动用 Pillow 渲染兜底；再失败才发送文字版。
 
 ---
 
@@ -114,7 +120,7 @@ playwright install chromium
 | 指令 | 说明 |
 | --- | --- |
 | `/涩批文字帮助` / `/sp文字帮助` | 发送文字版帮助 |
-| `/涩批图片帮助` / `/sp图片帮助` | 发送帮助图 |
+| `/涩批图片帮助` / `/sp图片帮助` | 发送 `assets/help.png` 新版帮助长图 |
 
 ### 网址导航（`features/urls.py`）
 

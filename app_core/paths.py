@@ -216,5 +216,5 @@ class PluginPaths:
             self.cache.mkdir(parents=True, exist_ok=True)
 
     def asset(self, *parts: str) -> Path:
-        """插件自带静态资源路径，例如 assets/help.jpg。"""
+        """插件自带静态资源路径，例如 assets/help.png。"""
         return self.assets.joinpath(*parts)
