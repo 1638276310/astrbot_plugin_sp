@@ -62,7 +62,7 @@ from .app_core.http import fetch_bytes
 from .app_core.imaging import add_noise, save_bytes
 from .app_core.magnetcat import describe_results, parse_command, search_magnet
 from .app_core.mtb import collect_album_urls, parse_detail_url
-from .app_core.mzt import collect_article_ids, parse_article_ref
+from .app_core.mzt import MAX_IDS_PER_COMMAND, parse_article_refs
 from .app_core.paths import PLUGIN_NAME, PluginPaths
 from .app_core.scheduler import TimeBasedScheduler
 from .app_core.settings import (
@@ -167,11 +167,6 @@ class spPlugin(
             self.push_updates,
         )
         scheduler.add_daily_job(
-            "写真ID增量更新",
-            self.settings.scheduler_mzt_cron,
-            self._scheduled_mzt_update,
-        )
-        scheduler.add_daily_job(
             "套图列表增量更新",
             self.settings.scheduler_mtb_cron,
             self._scheduled_mtb_update,
@@ -194,27 +189,6 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     # 定时任务的具体实现
     # ------------------------------------------------------------------ #
-    async def _scheduled_mzt_update(self) -> None:
-        """定时增量更新写真 ID 列表。"""
-        logger.info("[涩批DEBUG] 定时任务[写真ID增量更新]开始")
-        existing = set(self.mzt_ids())
-        logger.info(f"[涩批DEBUG] 定时任务[写真ID增量更新]现有ID数量：{len(existing)}")
-        discovered = await collect_article_ids(self.settings, existing)
-        if not discovered:
-            logger.info("[涩批] 写真ID增量更新：没有新ID")
-            logger.info("[涩批DEBUG] 定时任务[写真ID增量更新]结束：无新增")
-            return
-        merged = list(dict.fromkeys(discovered + list(existing)))
-        self.save_mzt_ids(merged)
-        logger.info(
-            f"[涩批] 写真ID增量更新完成：新增 {len(discovered)} 个，"
-            f"当前共 {len(merged)} 个"
-        )
-        logger.info(
-            f"[涩批DEBUG] 定时任务[写真ID增量更新]结束：新增 {len(discovered)} 个，"
-            f"当前共 {len(merged)} 个"
-        )
-
     async def _scheduled_mtb_update(self) -> None:
         """定时增量更新套图 URL 列表。"""
         logger.info("[涩批DEBUG] 定时任务[套图列表增量更新]开始")
@@ -785,48 +759,84 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     @filter.command("写真馆", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
-        """获取妹子图写真（/写真馆 <ID或链接>）"""
+        """获取妹子图写真（/写真馆 <ID或链接>，支持多个 ID 逐个获取）"""
         self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
-        ref = parse_article_ref(event.get_message_str())
-        if not ref:
+        refs = parse_article_refs(event.get_message_str(), default_kind="photo")
+        if not refs:
             logger.info("[涩批DEBUG] /写真馆：未能从消息中解析出文章ID")
             yield event.plain_result(
-                "用法：/写真馆 <ID或链接>，例如 /写真馆 171317 "
-                "或 /写真馆 https://kkmzt.com/photo/171317"
+                "请补充写真 ID 或链接，例如：/写真馆 171317\n"
+                "一次多个：/写真馆 171317 171318"
             )
             return
-        article_id, kind = ref
+        if len(refs) > MAX_IDS_PER_COMMAND:
+            logger.info(
+                f"[涩批DEBUG] /写真馆：解析到 {len(refs)} 个ID，"
+                f"超过上限 {MAX_IDS_PER_COMMAND}，只处理前 {MAX_IDS_PER_COMMAND} 个"
+            )
+            yield event.plain_result(
+                f"一次最多处理 {MAX_IDS_PER_COMMAND} 个 ID，"
+                f"已截取前 {MAX_IDS_PER_COMMAND} 个。"
+            )
+            refs = refs[:MAX_IDS_PER_COMMAND]
         logger.info(
-            f"[涩批DEBUG] /写真馆：开始获取文章ID={article_id} kind={kind}"
+            f"[涩批DEBUG] /写真馆：解析到 {len(refs)} 个图集 {[item[0] for item in refs]}"
         )
-        yield event.plain_result("正在搜索，请稍等...")
-        async for result in self._send_mzt_album(event, article_id, kind=kind):
-            yield result
+        if len(refs) == 1:
+            yield event.plain_result("正在搜索，请稍等...")
+        else:
+            yield event.plain_result(f"共 {len(refs)} 个图集，逐个获取，请稍等...")
+        for index, (article_id, kind) in enumerate(refs, 1):
+            if len(refs) > 1:
+                yield event.plain_result(f"[{index}/{len(refs)}] 图集 ID：{article_id}")
+            logger.info(
+                f"[涩批DEBUG] /写真馆：开始获取文章ID={article_id} kind={kind}"
+            )
+            async for result in self._send_mzt_album(event, article_id, kind=kind):
+                yield result
 
     @filter.command("潮拍馆", priority=20)
     async def sp_mzt_beauty(self, event: AstrMessageEvent):
-        """获取妹子图潮拍馆图集（/潮拍馆 <ID或链接>）"""
+        """获取妹子图潮拍馆图集（/潮拍馆 <ID或链接>，支持多个 ID 逐个获取）"""
         self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
-        ref = parse_article_ref(event.get_message_str())
-        # 未写出 ID 时按潮拍馆默认解析裸 ID
-        if not ref:
+        refs = parse_article_refs(event.get_message_str(), default_kind="beauty")
+        # 潮拍馆指令固定按潮拍馆类型处理（与旧版一致）
+        if not refs:
             logger.info("[涩批DEBUG] /潮拍馆：未能从消息中解析出文章ID")
             yield event.plain_result(
-                "用法：/潮拍馆 <ID或链接>，例如 /潮拍馆 191566 "
-                "或 /潮拍馆 https://kkmzt.com/beauty/191566"
+                "请补充潮拍馆 ID 或链接，例如：/潮拍馆 191566\n"
+                "一次多个：/潮拍馆 191566 191567"
             )
             return
-        article_id, _kind = ref
-        logger.info(f"[涩批DEBUG] /潮拍馆：开始获取文章ID={article_id}")
-        yield event.plain_result("正在搜索，请稍等...")
-        async for result in self._send_mzt_album(event, article_id, kind="beauty"):
-            yield result
+        if len(refs) > MAX_IDS_PER_COMMAND:
+            logger.info(
+                f"[涩批DEBUG] /潮拍馆：解析到 {len(refs)} 个ID，"
+                f"超过上限 {MAX_IDS_PER_COMMAND}，只处理前 {MAX_IDS_PER_COMMAND} 个"
+            )
+            yield event.plain_result(
+                f"一次最多处理 {MAX_IDS_PER_COMMAND} 个 ID，"
+                f"已截取前 {MAX_IDS_PER_COMMAND} 个。"
+            )
+            refs = refs[:MAX_IDS_PER_COMMAND]
+        logger.info(
+            f"[涩批DEBUG] /潮拍馆：解析到 {len(refs)} 个图集 {[item[0] for item in refs]}"
+        )
+        if len(refs) == 1:
+            yield event.plain_result("正在搜索，请稍等...")
+        else:
+            yield event.plain_result(f"共 {len(refs)} 个图集，逐个获取，请稍等...")
+        for index, (article_id, _kind) in enumerate(refs, 1):
+            if len(refs) > 1:
+                yield event.plain_result(f"[{index}/{len(refs)}] 图集 ID：{article_id}")
+            logger.info(f"[涩批DEBUG] /潮拍馆：开始获取文章ID={article_id}")
+            async for result in self._send_mzt_album(event, article_id, kind="beauty"):
+                yield result
 
     @filter.command("随机写真", priority=25)
     async def sp_mzt_random(self, event: AstrMessageEvent):
@@ -841,7 +851,10 @@ class spPlugin(
         ids = self.mzt_ids()
         if not ids:
             logger.info("[涩批DEBUG] /随机写真：写真ID列表为空")
-            yield event.plain_result("写真ID列表为空，请先使用 /更新写真ID")
+            yield event.plain_result(
+                "写真ID列表为空：请把 mztids.json 放到插件数据目录后重载插件，"
+                "或直接使用 /写真馆 <ID>"
+            )
             return
         article_id = random.choice(ids)
         logger.info(f"[涩批DEBUG] /随机写真：随机抽取ID={article_id}")
@@ -851,39 +864,23 @@ class spPlugin(
 
     @filter.command("更新写真ID", alias={"更新写真id"}, priority=20)
     async def sp_mzt_update_ids(self, event: AstrMessageEvent):
-        """增量更新写真ID列表（仅主人可用）"""
+        """已停用：不再直连 kkmzt 列表页。
+
+        ID 列表改为本地 ``mztids.json``（可由外部导入或旧数据迁移），
+        列表页抓取已从插件中移除，避免 Cloudflare 403 与静默误报。
+        """
         self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
         if not await self.require_admin(event):
             return
-        logger.info("[涩批DEBUG] /更新写真ID：开始增量更新")
-        yield event.plain_result("开始增量更新写真ID列表，这可能需要几分钟时间...")
-
-        existing = set(self.mzt_ids())
-        logger.info(f"[涩批DEBUG] /更新写真ID：现有ID数量 {len(existing)}")
-        try:
-            discovered = await collect_article_ids(self.settings, existing)
-        except Exception as exc:
-            logger.error(f"[涩批DEBUG] /更新写真ID：采集失败 {exc!r}")
-            yield event.plain_result(f"更新失败: {exc}")
-            return
-
-        if discovered:
-            merged = list(dict.fromkeys(discovered + list(existing)))
-            self.save_mzt_ids(merged)
-            logger.info(
-                f"[涩批DEBUG] /更新写真ID：新增 {len(discovered)} 个，"
-                f"当前共 {len(merged)} 个"
-            )
-            yield event.plain_result(
-                f"写真ID增量更新完成：新增 {len(discovered)} 个，"
-                f"当前共 {len(merged)} 个"
-            )
-        else:
-            logger.info("[涩批DEBUG] /更新写真ID：没有发现新ID")
-            yield event.plain_result("写真ID增量更新：没有新ID")
+        logger.info("[涩批DEBUG] /更新写真ID：指令已停用（不再直连列表页）")
+        yield event.plain_result(
+            "该指令已停用：插件不再直连 kkmzt 列表页（Cloudflare 403）。\n"
+            "请把 mztids.json 放入插件数据目录后重载插件；"
+            "单个图集请直接用 /写真馆 <ID> 或 /潮拍馆 <ID>。"
+        )
 
     # ------------------------------------------------------------------ #
     # 美图吧（features/mtb.py）

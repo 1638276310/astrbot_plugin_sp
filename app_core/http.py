@@ -407,7 +407,7 @@ async def fetch_response(
     """请求并返回 :class:`FetchResponse`；非 2xx 抛 :class:`HttpError`。
 
     403/429/5xx 与网络错误按 800~1500ms 抖动重试（默认 1 次）。
-    ``session`` 用于共享 Cookie（文章页 → 网页接口）；``ssl`` 用于 mTLS。
+    ``session`` 用于复用连接/共享 Cookie；``ssl`` 用于 mTLS 客户端证书。
     """
     request_headers = _headers(ua, referer, headers)
     if json_body is not None:

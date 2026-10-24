@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PLUGIN_VERSION = "v1.3.1"
+PLUGIN_VERSION = "v1.4.0"
 
 # 与原 TRSS 插件 config/api.js 保持一致的上游接口
 DEFAULT_PIXIV_API_BASE = "https://pid.kkndp.cn"
@@ -155,15 +155,9 @@ class PluginSettings:
         self.mzt_hd = self._bool("mzt_hd", False)
         # 0 = 不限制（抓取接口能返回的全部图片）；>0 时只取前 N 张
         self.mzt_max_images = max(0, self._int("mzt_max_images", 0))
-        self.mzt_browser_fallback = self._bool("mzt_browser_fallback", True)
-        # 403/Cloudflare 修复相关（详见 README「403 / Cloudflare 排查与代理」）：
-        # 统一代理（直连 + 浏览器都走它）；空 = 直连。
+        # 统一代理（APP 接口请求与图片下载都走它）；空 = 直连。
         self.mzt_proxy = self._opt_str("mzt_proxy", "")
-        # 覆盖统一浏览器 UA；空 = 内置 Chrome UA（不再随机混用 Firefox/Safari）。
-        self.mzt_ua = self._opt_str("mzt_ua", "")
-        # 浏览器打开文章页后等待 Cloudflare 挑战通过的最长秒数。
-        self.mzt_cf_wait = min(60, max(0, self._int("mzt_cf_wait", 8)))
-        # mTLS 客户端证书路径；空 = 按 assets/mzt_client.pem → app_core/mzt_client.pem 查找。
+        # mTLS 客户端证书路径（只接受插件目录内相对路径）；空 = 按包内相对路径查找。
         self.mzt_app_cert = self._opt_str("mzt_app_cert", "")
         self.mtb_site = self._str("mtb_site", DEFAULT_MTB_SITE).rstrip("/")
         self.cos_api = self._str("cos_api", DEFAULT_COS_API)
@@ -187,7 +181,6 @@ class PluginSettings:
 
         self.subscribe_check_interval = max(1, self._int("subscribe_check_interval", 4))
         self.enable_scheduler = self._bool("enable_scheduler", True)
-        self.scheduler_mzt_cron = self._str("scheduler_mzt_cron", "07:30")
         self.scheduler_mtb_cron = self._str("scheduler_mtb_cron", "09:30")
 
         self.enable_id_whitelist = self._bool("enable_id_whitelist", False)

@@ -56,37 +56,19 @@
     "description": "妹子图单次最多抓取的图片数",
     "type": "int",
     "default": 0,
-    "hint": "0 表示不限制（潮拍馆可拿到全量，写真馆最多为网页接口允许的 20 张预览）。"
-  },
-  "mzt_browser_fallback": {
-    "description": "妹子图直连接口失败时回退浏览器",
-    "type": "bool",
-    "default": true,
-    "hint": "直连 kkmzt.com 接口被 Cloudflare 拦截时，自动用 Playwright 在页面内请求接口并解密。关闭后仍会尝试“文章页首图兜底”。"
+    "hint": "0 表示不限制（APP 接口返回全量，写真馆不再受网页端 20 张预览限制）。"
   },
   "mzt_proxy": {
     "description": "妹子图统一代理地址",
     "type": "string",
     "default": "",
-    "hint": "直连、浏览器兜底与图片下载都走该代理，形如 http://127.0.0.1:7890；留空 = 直连。Cloudflare 持续 403 时优先配置住宅/可用代理，然后执行 python tools/mzt_diag.py 复核出口 IP。"
-  },
-  "mzt_ua": {
-    "description": "妹子图统一浏览器 UA",
-    "type": "string",
-    "default": "",
-    "hint": "留空 = 内置 Chrome/124 UA。仅在明确知道站点要求时覆盖；浏览器兜底使用 Chromium，禁止填 Firefox/Safari UA。"
-  },
-  "mzt_cf_wait": {
-    "description": "Cloudflare 挑战最长等待秒数",
-    "type": "int",
-    "default": 8,
-    "hint": "浏览器兜底打开文章页后最多等待多少秒让 Cloudflare 挑战通过；0 表示不等待。"
+    "hint": "APP 接口请求与图片下载都走该代理，形如 http://127.0.0.1:7890；留空 = 直连。Cloudflare 403 时优先配置可用代理，然后执行 python tools/mzt_diag.py 复核出口 IP。"
   },
   "mzt_app_cert": {
     "description": "APP 接口 mTLS 客户端证书路径",
     "type": "string",
     "default": "",
-    "hint": "留空 = 依次查找 assets/mzt_client.pem、app_core/mzt_client.pem；也可填绝对路径或相对插件根目录的路径。PEM 必须同时包含 CERTIFICATE 与 PRIVATE KEY。"
+    "hint": "只接受插件目录内的相对路径（如 assets/mzt_client.pem），绝对路径与 ~ 会被拒绝；留空 = 依次查找 assets/mzt_client.pem、app_core/mzt_client.pem。PEM 必须同时包含 CERTIFICATE 与 PRIVATE KEY。"
   },
   "mtb_site": {
     "description": "美图吧（ku1373）站点地址",
@@ -264,12 +246,7 @@
     "description": "启用内置定时任务",
     "type": "bool",
     "default": true,
-    "hint": "启用后自动执行：订阅推送检查、套图列表增量更新、写真ID增量更新。"
-  },
-  "scheduler_mzt_cron": {
-    "description": "写真ID自动更新时间（HH:MM）",
-    "type": "string",
-    "default": "07:30"
+    "hint": "启用后自动执行：订阅推送检查、套图列表增量更新。"
   },
   "scheduler_mtb_cron": {
     "description": "套图列表自动更新时间（HH:MM）",

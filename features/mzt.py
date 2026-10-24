@@ -1,11 +1,12 @@
 """功能：妹子图（kkmzt / 美之图）写真与潮拍。
 
-对应原 ``mzt.js``：
+对应原 ``mzt.js``，但抓取链路已收敛为：指令 ID → APP 接口（mTLS）→
+内置解密模块 → 按解密结果下载，不再访问站点 HTML 页面。
 
-* ``/写真馆 <ID或链接>``  —— 获取指定写真（也支持 /beauty 链接）
-* ``/潮拍馆 <ID或链接>``  —— 获取潮拍馆图集（网页端为全量图片）
+* ``/写真馆 <ID或链接>``  —— 获取指定写真（支持多个 ID 逐个获取）
+* ``/潮拍馆 <ID或链接>``  —— 获取潮拍馆图集（APP 接口为全量）
 * ``/随机写真``          —— 随机取一个已保存的 ID
-* ``/更新写真ID``        —— 增量更新 ID 列表（仅主人可用）
+* ``/更新写真ID``        —— 已停用（不再直连列表页），保留指令用于提示
 
 指令 handler 由主类 main.py 注册（与 get_px 同构），
 本文件保留业务方法。
@@ -18,7 +19,6 @@ from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._base import spFeature
 from ..app_core.mzt import (
-    collect_article_ids,
     fetch_album,
     format_fetch_error,
 )
@@ -68,7 +68,7 @@ class MztFeature(spFeature):
                 f"[涩批DEBUG] _send_mzt_album：解析文章ID={article_id} "
                 f"失败（{type(exc).__name__}）：{summary}"
             )
-            yield event.plain_result(f"连接网页失败，请稍后再试（{summary}）")
+            yield event.plain_result(f"获取图集失败，请稍后再试（{summary}）")
             return
 
         if not album.image_urls:
