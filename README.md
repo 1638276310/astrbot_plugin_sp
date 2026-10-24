@@ -419,3 +419,10 @@ A：打开 `enable_id_whitelist`，把群号填进 `id_whitelist`。
 
 **免责声明**：本插件仅用于技术交流与学习，所有内容来自第三方网站，
 请勿用于任何商业用途或违法行为，使用风险自负。
+
+---
+
+## 九、相关项目（友链）
+
+* **TRSS-Yunzai 版涩批插件 sp-plugin**：<https://github.com/1638276310/sp-plugin.git>
+  （本插件的 JS 原版，兼容 Miao-Yunzai / TRSS-Yunzai；AstrBot 版的功能与修复会持续同步到该仓库）
