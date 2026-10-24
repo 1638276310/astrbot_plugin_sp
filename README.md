@@ -25,13 +25,16 @@
 │   ├── mzt_client.pem            # APP 接口 mTLS 客户端证书（随仓库附带，克隆即可用）
 │   └── 说明.txt                  # 帮助图说明
 ├── tools/
-│   └── mzt_diag.py               # 妹子图 403 / Cloudflare / 代理 / 证书诊断脚本（独立运行）
+│   ├── mzt_diag.py               # 妹子图 APP 接口（mTLS + 解密）诊断脚本（独立运行）
+│   ├── selftest_mzt_chain.py     # 妹子图新链路自检（离线 fixture，7 组断言）
+│   └── fixtures/
+│       └── app_post_172250.json  # APP 接口密文 fixture（仅用于离线解密测试）
 ├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
 │   ├── settings.py               # 配置读取 + 上游接口与常量
 │   ├── storage.py                # JSON 持久化
 │   ├── http.py                   # aiohttp 异步请求封装
-│   ├── browser.py                # Playwright 无头浏览器封装
+│   ├── browser.py                # Playwright 无头浏览器封装（美图吧等使用）
 │   ├── imaging.py                # 噪点处理 / base64 / 扩展名识别
 │   ├── filecache.py              # 图片下载缓存
 │   ├── message.py                # 消息发送、合并转发、临时文件、权限
@@ -39,8 +42,8 @@
 │   ├── pixiv.py                  # P 站接口客户端（含订阅查询）
 │   ├── verify.py                 # 验车（磁力详情）
 │   ├── magnetcat.py              # 磁力猫搜索
-│   ├── mzt.py                    # 妹子图解析（写真馆 / 潮拍馆）
-│   ├── mzt_crypto.py             # 妹子图图片接口解密（网页 GCM / APP AES-CBC）
+│   ├── mzt.py                    # 妹子图链路：指令 ID → APP 接口(mTLS) → 内置解密
+│   ├── mzt_crypto.py             # 妹子图 APP 接口解密（AES-128-CBC/PKCS7）
 │   └── mtb.py                    # 美图吧（ku1373）解析
 └── features/                          # 🎯 功能模块：一个功能一个文件
     ├── _base.py                  # 各功能模块的基类
@@ -84,7 +87,7 @@ AstrBot 会自动读取 `requirements.txt` 安装依赖；也可以手动执行�
 pip install aiohttp pyyaml playwright Pillow
 ```
 
-### 3. 安装浏览器内核（**磁力猫 / 验车 / 美图吧 必须，妹子图仅兜底需要**）
+### 3. 安装浏览器内核（**磁力猫 / 验车 / 美图吧 必须**）
 
 这几个功能需要抓取网页，依赖 Playwright：
 
@@ -92,8 +95,8 @@ pip install aiohttp pyyaml playwright Pillow
 playwright install chromium
 ```
 
-> 妹子图已改为**优先直连 APP/站点接口**（`aiohttp`），只有接口被 Cloudflare 拦截时才会用到
-> 浏览器兜底；如果不需要磁力猫 / 验车 / 美图吧，可以不装浏览器内核。
+> 妹子图（`/写真馆`、`/潮拍馆`）只走 APP 接口（mTLS）+ 内置解密，不启动浏览器；
+> 如果不需要磁力猫 / 验车 / 美图吧，可以不装浏览器内核。
 > 用到需要浏览器的指令时，如果缺少内核，插件会返回明确的提示而不会崩溃。
 
 ### 4. 重载插件
@@ -141,15 +144,15 @@ playwright install chromium
 
 | 指令 | 说明 |
 | --- | --- |
-| `/写真馆 12345` 或 `/写真馆 https://kkmzt.com/photo/12345` | 按 ID / 链接获取写真 |
-| `/潮拍馆 12345` 或 `/潮拍馆 https://kkmzt.com/beauty/12345` | 按 ID / 链接获取潮拍馆图集 |
-| `/随机写真` | 从已保存的 ID 里随机取一个 |
-| `/更新写真ID` | 增量更新 ID 列表（**仅主人可用**） |
+| `/写真馆 12345` 或 `/写真馆 <链接>` | 按 ID / 链接获取写真（支持多个 ID：`/写真馆 171317 171318`） |
+| `/潮拍馆 12345` 或 `/潮拍馆 <链接>` | 按 ID / 链接获取潮拍馆图集 |
+| `/随机写真` | 从数据目录 `mztids.json` 里随机取一个 ID |
+| `/更新写真ID` | **已停用**（不再直连列表页），仅提示如何导入 `mztids.json` |
 
-> 妹子图现在**优先直连官方 APP 图片接口**（`api.iimzt.com`，mTLS 客户端证书 + 全量图片），
-> APP 接口不可用时自动回退网页接口，再失败才回退 Playwright 浏览器。
-> 网页接口下潮拍馆（`/beauty/`）为全量；写真馆（`/photo/`）被站点限制为
-> **前 20 张预览**（插件会如实标注 `20/57` 这类数量）。
+> 妹子图只走一条链路：**指令里的 ID → 拼 APP 接口地址 → 包内 mTLS 证书请求 →
+> 内置解密模块解出完整图片 URL → 逐张下载**。
+> 不访问站点 HTML 页面、不请求网页接口、也不启动浏览器，因此没有 Cloudflare
+> 挑战页等待/误判，也没有直连兜底。
 > 详细逆向说明见下方 [「妹子图图片接口逆向说明」](#妹子图图片接口逆向说明)。
 
 ### P 站（`features/pixiv_pid.py` / `pixiv_artist.py` / `pixiv_tag.py`）
@@ -204,34 +207,22 @@ playwright install chromium
 
 ### 妹子图图片接口逆向说明
 
-2026-10 对站点前端 JS（`post.js` / `main.js`，javascript-obfuscator 混淆）以及官方
-Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn 模拟 `libsec.so`
-解出 RC4 密钥后全部还原）的逆向结论：
+2026-10 对官方 Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
+模拟 `libsec.so` 解出 RC4 密钥后全部还原）的逆向结论。插件**只使用 APP 接口**：
 
-#### 1. 网页端接口（kkmzt.com，兜底）
+#### 1. 接口与证书
 
-* 文章页 `https://kkmzt.com/photo/{id}`（写真馆）与 `https://kkmzt.com/beauty/{id}`（潮拍馆）
-  的 HTML 里只有第一张图，其余图片由 JS 异步拉取；
-* 图片列表接口：`GET https://kkmzt.com/app/post/p?id={文章ID}` → `{"data": "<base64>"}`；
-* 解密流程：
-  1. base64 解码后拆分：`salt = raw[0:16]`、`iv = raw[16:28]`、`密文 + 16 字节 GCM tag = raw[28:]`；
-  2. `HKDF-SHA256(ikm = str(文章ID), salt = salt, info = b"")` 派生 32 字节密钥；
-  3. `AES-256-GCM` 解密得到图片**文件名**数组；
-  4. 完整图片 URL = 文章页首图目录 + 文件名
-     （写真馆如 `https://f.meizitu.net/image/2026/04/`，潮拍馆为 `https://f.meizitu.net/mw1024/`）。
-* 写真馆（`/photo/`）的网页接口被服务端限制为**前 20 张**（页面上会提示“预览结束，安装美之图APP，免费观赏全片”）；
-  潮拍馆（`/beauty/`）网页端没有这个限制，就是全量。
-
-#### 2. APP 端接口（api.iimzt.com，优先，全量）
-
-* 逆向自解密后的 widget JS：`GET https://api.iimzt.com/app/post/p?id={文章ID}`
-  （基址来自 `script/utils.js getApiUrl()`，可被 `https://ini.iimzt.com/data/init.json` 的 `api` 字段覆盖）；
+* `GET https://api.iimzt.com/app/post/p?id={文章ID}`
+  （基址来自 `script/utils.js getApiUrl()`，可被 `https://ini.iimzt.com/data/init.json`
+  的 `api` 字段覆盖）；
 * **必须携带 APP 内置的 mTLS 客户端证书**：APK 的 `assets/widget/res/config` 是
   PKCS#12 客户端证书（`CN=AB Client`，密码在解密后的 `res/key.xml` 的 `key` 字段），
   APP 启动时通过 `api.applyCertificates` 安装；**没有证书时 Cloudflare 会对
   `api.iimzt.com` 直接返回 403**（普通请求、浏览器、脚本都一样）。
-  仓库已附带该证书 `assets/mzt_client.pem`（证书+私钥，从官方 APK 提取，
-  仅用于访问图片接口），克隆后即可使用；若该文件缺失，插件会自动回退网页接口。
+  仓库已附带该证书 `assets/mzt_client.pem`（证书 + 私钥，从官方 APK 提取，
+  仅用于访问图片接口）。
+* 配置 `mzt_app_cert` 只接受**插件目录内的相对路径**；留空自动使用
+  `assets/mzt_client.pem`（旧路径 `app_core/mzt_client.pem` 兼容）。
 * 响应同样是 `{"data": "<payload>"}`，但 payload 是 **hex 字符串**（不是 base64），
   hex 解码后是 **AES-128-CBC + PKCS7** 密文：
   * `key = md5(str(文章ID)).hexdigest()[8:24].lower()`（16 个 ASCII 字符）
@@ -239,7 +230,7 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
 * 明文是 JSON **对象**：
   `{"id","date","title","count","thumb","thumbs","images","model","desc",...}`，
   `images` 是**带 `?sign=` 的完整图片 URL**（`https://ap.iimzt.com/...jpg?sign=...`），
-  `count` 即全量张数（写真馆也是全量 —— 这就是网页端 20 张限制的根因）；
+  `count` 即全量张数（写真馆也是全量）。
 * 高清图（APP 的 toggleHD）分两种：
   * 写真馆：`https://ap.iimzt.com/...jpg` → `https://ax.iimzt.com/...jpg`
     + `?sign=base64url_nopad(md5("auavax" + path))`（`axkey` 来自 `res/key.xml`）；
@@ -248,92 +239,95 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
 
 #### 3. 插件实现
 
-* `app_core/mzt_crypto.py`：同时支持网页端 GCM（base64）与 APP 端 CBC（hex）两种格式
-  （按编码/长度自动识别，失败会换另一种重试）；优先用 `cryptography`，未安装时退回
-  纯 Python AES 实现（无需新增依赖）。
-* `app_core/mzt.py`：优先 APP 接口（mTLS 全量）→ 网页接口（写真馆 20 张预览）→
-  Playwright 页面内 fetch + WebCrypto 兜底；图集信息里会显示数据源与 `已获取/总数`。
+* `app_core/mzt_crypto.py`：实现 APP 端 AES-128-CBC/PKCS7 解密；优先用
+  `cryptography`，未安装时退回纯 Python AES 实现（无需新增依赖）。
+* `app_core/mzt.py`：`parse_article_refs()` 从指令取 ID（支持多个）→
+  `_app_api_url()` 拼 `{mzt_app_api}/post/p?id={id}` → `_app_ssl_context()` 加载包内
+  证书 → `fetch_response()` 请求 → `decode_api_payload()` 解密 → `AlbumInfo`；
+  失败统一抛 `MztFetchError`，**不再回退网页接口 / 浏览器 / 首图**。
+* `features/mzt.py`：只按 `album.image_urls`（解密返回的完整图片 URL）逐张下载，
+  保留原有命名、并发与失败重试策略。
+
 > 说明：mTLS 证书来自官方 APP，已随仓库附带 `assets/mzt_client.pem`；
-> 若官方后续更换证书，`api.iimzt.com` 会重新 403，此时插件自动回退到网页接口，
-> 需要从新版 APK 重新提取证书。
+> 若官方后续更换证书，`api.iimzt.com` 会重新 403，需要从新版 APK 重新提取证书
+> （插件不会回退网页接口）。
 > 提示：若本仓库为公开仓库，该客户端证书也会随之公开；介意的话可将仓库设为私有。
 
 ### 403 / Cloudflare 排查与代理（`app_core/mzt.py`）
 
-> 实测结论（2026-10）：同一出口 IP 下，Python 直连文章页 / 网页接口 / mTLS APP 接口 /
-> 图片 CDN 全部 200，而无头 Chromium 打开文章页被 Cloudflare 直接 403。
-> **被 CF 拦截时不要试图“魔法绕过”，优先换可用出口（代理）并确保证书/会话/请求头正确。**
+> 实测结论（2026-10）：插件只请求 `api.iimzt.com`（mTLS）。证书有效时接口返回全量图片；
+> 证书缺失/无效时 Cloudflare 直接 403。插件不再访问站点 HTML 页面，因此没有挑战页
+> 等待，也不存在“挑战页被当成成功”的问题。
 
-#### 1. 降级顺序与日志
+#### 1. 链路与日志
 
-`/写真馆`、`/潮拍馆` 会按以下顺序尝试（与 JS 版一致）：
-
-1. **APP 接口**（`mzt_app_api`，mTLS 客户端证书，全量）；
-2. **网页接口**（同一个 HTTP 会话先 GET 文章页、再 GET `/app/post/p?id=`，共享 Cookie，
-   带文章页 Referer）；
-3. **浏览器兜底**（Playwright：`zh-CN` + 统一 Chrome UA + stealth 参数 → 打开文章页 →
-   识别 Cloudflare 挑战并等待 `mzt_cf_wait` 秒 → 页面内 fetch 解密 → `context.request` 兜底）；
-4. **文章页首图兜底**：直连已拿到文章页 `first_image` 但 1~3 全失败时，只返回一张首图，
-   消息头标注“网页首图兜底”，不会让指令直接报错。
-
-每个阶段都会输出一行 info 日志（URL 已去掉 `sign` 等 query 值）：
+`/写真馆`、`/潮拍馆` 只有一条链路：指令 ID → APP 接口（mTLS）→ 内置解密 → 按解密结果下载。
+每个阶段输出一行 info 日志（URL 已去掉 `sign` 等 query 值）：
 
 ```
-[mzt] stage=article url=https://kkmzt.com/photo/171317 status=200 cf-ray=... elapsed=412ms
-[mzt] stage=app url=https://api.iimzt.com/app/post/p?id=171317 status=403 cf-ray=... elapsed=380ms
-[mzt] stage=web url=https://kkmzt.com/app/post/p?id=171317 status=403 cf-ray=... elapsed=301ms
-[mzt] stage=browser url=https://kkmzt.com/photo/171317 status=403 cf-ray=... challenge=blocked elapsed=1201ms
-[mzt] result source=page images=1 total=57 truncated=true
+[mzt] stage=cert path=mzt_client.pem state=ok
+[mzt] stage=app url=https://api.iimzt.com/app/post/p?id=171317 status=200 cf-ray=... elapsed=380ms
+[mzt] stage=decrypt id=171317 state=ok scheme=app count=69 images=69 status=200 cf-ray=...
+[mzt] chain=app+decrypt id=171317 kind=photo images=69 total=69
+[mzt] result source=app images=69 total=69 truncated=false
 ```
 
-失败时用户看到的文案前缀不变，括号内是结构化阶段摘要：
+失败时用户看到（`format_fetch_error` 脱敏、定长）：
 
 ```
-连接网页失败，请稍后再试（APP接口:HTTP 403；网页接口:HTTP 403；浏览器:Cloudflare 拦截 Ray ID a4f7cd28bf6de196；可在配置 mzt_proxy 使用可用代理后重试）
+获取图集失败，请稍后再试（APP接口:Cloudflare 拦截 HTTP 403（Ray ID a4f7cd28bf6de196）；APP 接口被 Cloudflare 拒绝时，先确认 mTLS 证书有效）
 ```
+
+解密成功但图片列表为空或数量异常时，日志会额外记录 kind/状态码/ray，例如：
+
+```
+[mzt] stage=decrypt id=171317 state=empty kind=app count=0 status=200 cf-ray=...
+[mzt] stage=decrypt id=171317 state=count-mismatch count=69 images=20 status=200 cf-ray=...
+```
+
+> 旧版的网页接口 / 浏览器 / 首图兜底与 `/更新写真ID` 列表页抓取已全部移除，
+> 因此不会再有挑战页轮询，也不会把“没有新ID”当成成功。
 
 #### 2. 配置项
 
 | 配置项 | 用法 |
 | --- | --- |
-| `mzt_proxy` | 直连、浏览器兜底与图片下载都走该代理，如 `http://127.0.0.1:7890` 或 `http://user:pass@host:port`。**部署机是机房 IP 被 Cloudflare 整段拦截时，这是唯一有效手段；图片 CDN 往往同样被按 IP 拦截，所以下载也复用同一代理。** 改完重载插件即可。 |
-| `mzt_ua` | 留空使用内置 Chrome/124 UA；浏览器兜底是 Chromium，**不要**填 Firefox/Safari UA。 |
-| `mzt_cf_wait` | 浏览器打开文章页后等待 CF 挑战通过的最长秒数，默认 8；0 表示不等待。 |
-| `mzt_app_cert` | APP 接口 mTLS 证书路径。留空自动查找 `assets/mzt_client.pem` → `app_core/mzt_client.pem`；也可填绝对路径或相对插件根目录的路径。PEM 必须**同时包含** CERTIFICATE 与 PRIVATE KEY，否则日志会记 `stage=cert ... cert-invalid:*`。 |
+| `mzt_app_api` | APP 接口基址，默认 `https://api.iimzt.com/app/`；留空则链路不可用（**不会**回退网页）。 |
+| `mzt_app_cert` | 证书相对路径，只接受插件目录内路径；留空按 `assets/mzt_client.pem` → `app_core/mzt_client.pem` 查找。PEM 必须**同时包含** CERTIFICATE 与 PRIVATE KEY，否则日志会记 `stage=cert ... cert-invalid:*`。 |
+| `mzt_proxy` | APP 接口请求与图片下载共用代理，如 `http://127.0.0.1:7890` 或 `http://user:pass@host:port`；空 = 直连。**出口 IP 被 Cloudflare 拦截时使用；图片 CDN 往往同样按 IP 拦截，所以下载复用同一代理。** |
 
 > 证书缺失/无效时 APP 接口必然被 Cloudflare 403（这**不是** IP 问题）；
-> 确认 `assets/mzt_client.pem` 已随插件一起上传，或在 `mzt_app_cert` 指定正确路径。
+> 确认 `assets/mzt_client.pem` 已随插件一起上传。
 
 #### 3. 独立诊断脚本
 
-不依赖 AstrBot 启动，直接看出口 IP / DNS / 时间 / 证书 / 四段链路 / headless 是否被拦：
+不依赖 AstrBot 启动，直接看出口 IP / DNS / 时间 / 包内证书 / APP 接口状态与解密张数 / 图片 CDN：
 
 ```bash
 # 在插件根目录（astrbot_plugin_sp/）执行
 python tools/mzt_diag.py --id 171317
 python tools/mzt_diag.py --id 171317 --json > mzt_diag.json
 python tools/mzt_diag.py --id 171317 --proxy http://127.0.0.1:7890
-python tools/mzt_diag.py --id 171317 --cert /path/to/mzt_client.pem --no-browser
 ```
 
 输出已脱敏（无 Cookie / 证书内容 / `sign=` 值），其中：
 
 * `egress.ip / loc / colo`：实际出口 IP 与 Cloudflare 处理节点；
-* `http_chain.article / web_api / app_api / image_cdn`：状态码、`cf_ray`、耗时、解密张数；
-* `certificates`：候选路径、PEM 是否完整、能否 `load_cert_chain`；
-* `playwright`：headless 是否被 CF 拦截（`blocked` + `cf_ray`）；
-* `summary.likely_cause`：一句话判断（例如“文章页被 Cloudflare 拦截，优先配置 mzt_proxy”）。
+* `certificates`：包内相对路径候选、PEM 是否完整、能否 `load_cert_chain`；
+* `app_api`：状态码、`cf_ray`、解密张数（`decode.images`）与首图 CDN 探测；
+* `summary.likely_cause`：一句话判断（例如“APP 接口被 Cloudflare 拦截：确认 mTLS 证书有效”）。
 
 #### 4. 常见处理
 
-* **文章页 200、APP 403**：证书没加载（看 `certificates` / `stage=cert`），或证书被官方更换；
-* **文章页 403 + `cf-ray`**：出口被 CF 风控 → 配置 `mzt_proxy` 后重跑诊断，确认出口 IP 已变化；
-* **无头浏览器始终 403**：Cloudflare 对自动化指纹的硬拦截，属预期行为，插件会记录 Ray ID 并继续降级；
+* **APP 403 + `cf-ray`**：① 证书没加载/被官方更换 → 检查 `certificates` / `stage=cert`；
+  ② 出口被风控 → 配置 `mzt_proxy` 后重跑诊断确认 IP 已变化；
+* **`stage=decrypt ... state=empty`**：解密成功但图片列表为空/数量异常，日志会带 `status/cf-ray`，
+  插件直接报错，不会改走其它链路；
 * **同一篇连续失败**：进程内 3 秒限速（日志 `[mzt] rate-limit wait=...ms`），不要连续狂刷。
 
-> 直连与浏览器均已统一发 `Accept-Language: zh-CN`、`Sec-Fetch-*`、文章页 Referer；
-> 浏览器启动参数含 `--disable-blink-features=AutomationControlled`，并在
-> `add_init_script` 里把 `navigator.webdriver` 置为 undefined。
+> APP 接口请求统一使用官方 APP UA、`Accept-Language: zh-CN` 与站点 Referer；
+> 请求走 `app_core/http.py` 的 `fetch_response()`（含 800~1500ms 抖动重试），
+> 妹子图不再启动浏览器。
 
 ### 设置（`features/recall.py`，**仅主人可用**）
 
@@ -356,15 +350,12 @@ python tools/mzt_diag.py --id 171317 --cert /path/to/mzt_client.pem --no-browser
 | `dingyue_api` / `dingyue_key` | `https://user.kkndp.cn` / 空 | 订阅推送接口与 key |
 | `magnet_api` | `https://whatslink.info/api/v1/link` | 验车接口 |
 | `magnet_cat_sites` | 4 个镜像站 | 磁力猫镜像，失效时可自行更换 |
-| `mzt_site` | `https://kkmzt.com` | 妹子图站点 |
-| `mzt_app_api` | `https://api.iimzt.com/app/` | 美之图 APP 图片接口（全量）；留空则只用网页接口 |
+| `mzt_site` | `https://kkmzt.com` | 妹子图站点（APP 请求 Referer 与展示地址） |
+| `mzt_app_api` | `https://api.iimzt.com/app/` | 美之图 APP 接口（全量）；留空则链路不可用（不回退网页） |
 | `mzt_hd` | `false` | APP 接口图片是否转高清（写真馆 ax+sign / 潮拍馆 mw2000，流量更大） |
 | `mzt_max_images` | `0` | 妹子图单次最多抓取张数，0 表示不限制 |
-| `mzt_browser_fallback` | `true` | 妹子图直连接口失败时回退 Playwright |
-| `mzt_proxy` | 空 | 妹子图统一代理（直连 + 浏览器兜底 + 图片下载），如 `http://127.0.0.1:7890`；空 = 直连 |
-| `mzt_ua` | 空 | 覆盖统一浏览器 UA；空 = 内置 Chrome/124 UA |
-| `mzt_cf_wait` | `8` | 浏览器兜底等待 Cloudflare 挑战通过的最长秒数 |
-| `mzt_app_cert` | 空 | mTLS 客户端证书路径；空 = 依次查找 `assets/mzt_client.pem`、`app_core/mzt_client.pem` |
+| `mzt_proxy` | 空 | APP 接口请求与图片下载共用代理，如 `http://127.0.0.1:7890`；空 = 直连 |
+| `mzt_app_cert` | 空 | mTLS 证书相对路径（只接受插件目录内路径）；空 = 依次查找 `assets/mzt_client.pem`、`app_core/mzt_client.pem` |
 | `mtb_site` | `https://www.ku1373.cc` | 美图吧站点 |
 | `cos_api` | `https://img.mengxix.top/` | 2图/3图接口 |
 | `url_groups` | 6 组网址 | 网址导航内容 |
@@ -377,7 +368,6 @@ python tools/mzt_diag.py --id 171317 --cert /path/to/mzt_client.pem --no-browser
 | `max_pages_per_album` | `20` | 单个套图最多解析页数 |
 | `enable_scheduler` | `true` | 是否启用内置定时任务 |
 | `subscribe_check_interval` | `4` | 订阅推送检查间隔（小时） |
-| `scheduler_mzt_cron` | `07:30` | 写真 ID 自动更新时间 |
 | `scheduler_mtb_cron` | `09:30` | 套图列表自动更新时间 |
 | `enable_id_whitelist` / `id_whitelist` | `false` / `[]` | 会话白名单 |
 | `enable_group_limit` | `true` | 是否限制订阅数量 |
@@ -437,7 +427,7 @@ R18 模式、图片偏好、撤回设置等直接保存在插件配置中，WebU
 1. **`/更新套图列表` / `/全量更新套图列表`** 结束后会把"本次新增 / 现有总计"一起报出来，便于确认是否真的新增了内容。
 2. **`/设置R18模式` / `/设置图片偏好` / `/设置sp撤回 X`** 做了取值校验，超出范围会提示而不是直接写入。
 3. **推送不再依赖 Yunzai 的 `schedule`**：改为插件内部的 asyncio 调度器，
-   订阅检查按 `subscribe_check_interval` 小时执行，写真 ID / 套图列表在设定时间每日执行。
+   订阅检查按 `subscribe_check_interval` 小时执行，套图列表在设定时间每日执行。
 4. **合并转发**：原插件需要针对 NapCat 手写 `send_group_forward_msg`，
    AstrBot 版改用标准消息链（`Node` / `Nodes`），由适配器自动选择群/私聊转发接口，
    同时保留 `forward_as_node=false` 时退化为普通消息发送。
@@ -467,20 +457,19 @@ A：多为图床风控。可以尝试关闭 `track_pixel`，或调大 `download_
 **Q：磁力猫搜索失败？**
 A：镜像站域名变化很频繁，把 `magnet_cat_sites` 换成当前可用的域名即可。
 
-**Q：为什么 `/写真馆` 只发 20 张图？**
-A：分两种情况：
-① 正常情况下插件会优先调用官方 APP 接口（`mzt_app_api`，默认 `https://api.iimzt.com/app/`），
-   写真馆也能拿到**全量**（图集信息里会显示“数据源: 美之图 APP 接口（全量）”）；
-② 如果只显示 20 张且标注“网页接口仅提供前 20 张预览”，说明 APP 接口暂时不可用
-   （网络/Cloudflare/接口变更），此时插件已自动退回网页接口，网页端被站点限制为前 20 张。
-   可检查 `mzt_app_api` 配置，或稍后重试；潮拍馆（`/潮拍馆`、`/beauty/` 链接）网页端本来就是全量。
+**Q：`/写真馆` 提示获取失败 / 只拿到部分图片？**
+A：妹子图只走 APP 接口（mTLS + 内置解密），失败时**不会**回退网页。常见原因：
+① `assets/mzt_client.pem` 缺失/失效，日志会记 `stage=cert state=cert-invalid:*`；
+② 出口 IP 被 Cloudflare 风控（提示 `APP接口:Cloudflare 拦截 HTTP 403`），配置 `mzt_proxy` 后重试；
+③ 配置了 `mzt_max_images` > 0 时会按配置截断，消息头会标注“已按配置 mzt_max_images 截断”。
+排查：在插件根目录执行 `python tools/mzt_diag.py --id 171317`，看 `summary.likely_cause`。
 
-**Q：妹子图提示“连接网页失败”？**
-A：站点/APP 接口使用 Cloudflare。新版错误文案会带各阶段状态码与 Ray ID，例如
-`连接网页失败，请稍后再试（APP接口:HTTP 403；网页接口:HTTP 403；浏览器:Cloudflare 拦截 Ray ID ...）`。
-处理顺序：① 先在插件根目录跑 `python tools/mzt_diag.py --id 171317` 看 `summary.likely_cause`；
-② APP 接口 403 多为证书未加载，检查 `assets/mzt_client.pem` 或配置 `mzt_app_cert`；
-③ 文章页也 403 时配置 `mzt_proxy`（住宅/可用代理）后重试；
+**Q：妹子图提示“获取图集失败”？**
+A：错误文案会带阶段、状态码与 Ray ID，例如
+`获取图集失败，请稍后再试（APP接口:Cloudflare 拦截 HTTP 403（Ray ID ...）；...）`。
+处理顺序：① 跑 `python tools/mzt_diag.py --id 171317` 看 `certificates` 与 `app_api`；
+② APP 接口 403 多为证书未加载/被更换，检查 `assets/mzt_client.pem` 或配置 `mzt_app_cert`；
+③ 证书正常仍 403 时配置 `mzt_proxy`（住宅/可用代理）后重试；
 ④ 详见上方 [「403 / Cloudflare 排查与代理」](#403--cloudflare-排查与代理app_coremztpy)。
 
 **Q：P 站接口报错 / 返回格式异常？**
