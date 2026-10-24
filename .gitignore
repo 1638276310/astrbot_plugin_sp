@@ -25,5 +25,3 @@ jadx-gui-*/
 msedgedriver.exe
 # 本地独立脚本/逆向文档（不随插件提交）
 mzt_local/
-# APP mTLS 客户端证书（敏感凭据，仅本地保留）
-app_core/mzt_client.pem
