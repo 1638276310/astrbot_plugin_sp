@@ -22,6 +22,7 @@
 ├── README.md
 ├── assets/
 │   ├── help.png                  # /涩批图片帮助 发送的新版完整帮助长图
+│   ├── mzt_client.pem            # APP 接口 mTLS 客户端证书（随仓库附带，克隆即可用）
 │   └── 说明.txt                  # 帮助图说明
 ├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
@@ -38,7 +39,6 @@
 │   ├── magnetcat.py              # 磁力猫搜索
 │   ├── mzt.py                    # 妹子图解析（写真馆 / 潮拍馆）
 │   ├── mzt_crypto.py             # 妹子图图片接口解密（网页 GCM / APP AES-CBC）
-│   ├── mzt_client.pem            # APP 接口 mTLS 客户端证书（随仓库附带，克隆即可用）
 │   └── mtb.py                    # 美图吧（ku1373）解析
 └── features/                          # 🎯 功能模块：一个功能一个文件
     ├── _base.py                  # 各功能模块的基类
@@ -228,7 +228,7 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
   PKCS#12 客户端证书（`CN=AB Client`，密码在解密后的 `res/key.xml` 的 `key` 字段），
   APP 启动时通过 `api.applyCertificates` 安装；**没有证书时 Cloudflare 会对
   `api.iimzt.com` 直接返回 403**（普通请求、浏览器、脚本都一样）。
-  仓库已附带该证书 `app_core/mzt_client.pem`（证书+私钥，从官方 APK 提取，
+  仓库已附带该证书 `assets/mzt_client.pem`（证书+私钥，从官方 APK 提取，
   仅用于访问图片接口），克隆后即可使用；若该文件缺失，插件会自动回退网页接口。
 * 响应同样是 `{"data": "<payload>"}`，但 payload 是 **hex 字符串**（不是 base64），
   hex 解码后是 **AES-128-CBC + PKCS7** 密文：
@@ -251,7 +251,7 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
   纯 Python AES 实现（无需新增依赖）。
 * `app_core/mzt.py`：优先 APP 接口（mTLS 全量）→ 网页接口（写真馆 20 张预览）→
   Playwright 页面内 fetch + WebCrypto 兜底；图集信息里会显示数据源与 `已获取/总数`。
-> 说明：mTLS 证书来自官方 APP，已随仓库附带 `app_core/mzt_client.pem`；
+> 说明：mTLS 证书来自官方 APP，已随仓库附带 `assets/mzt_client.pem`；
 > 若官方后续更换证书，`api.iimzt.com` 会重新 403，此时插件自动回退到网页接口，
 > 需要从新版 APK 重新提取证书。
 > 提示：若本仓库为公开仓库，该客户端证书也会随之公开；介意的话可将仓库设为私有。

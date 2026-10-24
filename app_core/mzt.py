@@ -51,7 +51,8 @@ APP_API_DEFAULT = "https://api.iimzt.com/app/"
 APP_UA = "MztApp For Android Version/3.8.7"
 # APP 内 mTLS 客户端证书（从 APK 的 assets/widget/res/config 的 PKCS#12 提取，
 # 密码在解密后的 res/key.xml；没有它 api.iimzt.com 会被 Cloudflare 直接 403）
-APP_CLIENT_CERT_PATH = Path(__file__).with_name("mzt_client.pem")
+# 证书属于静态资源，统一放在插件根目录的 assets/ 下
+APP_CLIENT_CERT_PATH = Path(__file__).resolve().parent.parent / "assets" / "mzt_client.pem"
 
 _APP_SSL_CONTEXT: ssl.SSLContext | None = None
 
