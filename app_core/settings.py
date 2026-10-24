@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PLUGIN_VERSION = "v1.0"
+PLUGIN_VERSION = "v1.3.1"
 
 # 与原 TRSS 插件 config/api.js 保持一致的上游接口
 DEFAULT_PIXIV_API_BASE = "https://pid.kkndp.cn"
@@ -149,6 +149,13 @@ class PluginSettings:
         self.magnet_api = self._str("magnet_api", DEFAULT_MAGNET_API)
         self.magnet_cat_sites = self._list("magnet_cat_sites", DEFAULT_MAGNET_CAT_SITES)
         self.mzt_site = self._str("mzt_site", DEFAULT_MZT_SITE).rstrip("/")
+        # 官方 APP 图片接口基址（全量图片；App 逆向见 README）。留空 = 禁用 APP 接口。
+        raw_app_api = self._raw.get("mzt_app_api", "https://api.iimzt.com/app/")
+        self.mzt_app_api = str(raw_app_api or "").strip().rstrip("/")
+        self.mzt_hd = self._bool("mzt_hd", False)
+        # 0 = 不限制（抓取接口能返回的全部图片）；>0 时只取前 N 张
+        self.mzt_max_images = max(0, self._int("mzt_max_images", 0))
+        self.mzt_browser_fallback = self._bool("mzt_browser_fallback", True)
         self.mtb_site = self._str("mtb_site", DEFAULT_MTB_SITE).rstrip("/")
         self.cos_api = self._str("cos_api", DEFAULT_COS_API)
         self.sp_video_urls = self._list("sp_video_urls", DEFAULT_VIDEO_URLS)

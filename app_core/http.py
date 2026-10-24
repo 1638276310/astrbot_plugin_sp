@@ -80,12 +80,16 @@ async def fetch_bytes(
     headers: dict[str, str] | None = None,
     max_size: int = 64 * 1024 * 1024,
     proxy: str | None = None,
+    ssl: Any | None = None,
 ) -> bytes:
-    """下载二进制内容。"""
+    """下载二进制内容。``ssl`` 可传入自定义 SSLContext（如 mTLS 客户端证书）。"""
     _dbg(f"fetch_bytes：GET {url[:120]} timeout={timeout}s referer={referer!r}")
     client_timeout = aiohttp.ClientTimeout(total=timeout)
+    connector = aiohttp.TCPConnector(ssl=ssl) if ssl is not None else None
     try:
-        async with aiohttp.ClientSession(timeout=client_timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=client_timeout, connector=connector
+        ) as session:
             async with session.get(
                 url,
                 headers=_headers(ua, referer, headers),
@@ -147,15 +151,19 @@ async def fetch_json(
     method: str = "GET",
     json_body: dict[str, Any] | None = None,
     cookies: dict[str, str] | None = None,
+    ssl: Any | None = None,
 ) -> Any:
-    """请求并解析 JSON。"""
+    """请求并解析 JSON。``ssl`` 可传入自定义 SSLContext（如 mTLS 客户端证书）。"""
     _dbg(f"fetch_json：{method.upper()} {url[:120]} timeout={timeout}s")
     client_timeout = aiohttp.ClientTimeout(total=timeout)
     req_headers = _headers(ua, referer, headers)
     if json_body is not None:
         req_headers.setdefault("Content-Type", "application/json")
+    connector = aiohttp.TCPConnector(ssl=ssl) if ssl is not None else None
     try:
-        async with aiohttp.ClientSession(timeout=client_timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=client_timeout, connector=connector
+        ) as session:
             async with session.request(
                 method.upper(),
                 url,

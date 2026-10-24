@@ -62,7 +62,7 @@ from .app_core.http import fetch_bytes
 from .app_core.imaging import add_noise, save_bytes
 from .app_core.magnetcat import describe_results, parse_command, search_magnet
 from .app_core.mtb import collect_album_urls, parse_detail_url
-from .app_core.mzt import collect_article_ids, parse_article_id
+from .app_core.mzt import collect_article_ids, parse_article_ref
 from .app_core.paths import PLUGIN_NAME, PluginPaths
 from .app_core.scheduler import TimeBasedScheduler
 from .app_core.settings import (
@@ -785,19 +785,47 @@ class spPlugin(
     # ------------------------------------------------------------------ #
     @filter.command("写真馆", priority=20)
     async def sp_mzt_album(self, event: AstrMessageEvent):
-        """获取妹子图写真（/写真馆 <ID>）"""
+        """获取妹子图写真（/写真馆 <ID或链接>）"""
         self.mark_event_consumed(event)
         if not await self.guard(event):
             return
 
-        article_id = parse_article_id(event.get_message_str())
-        if not article_id:
+        ref = parse_article_ref(event.get_message_str())
+        if not ref:
             logger.info("[涩批DEBUG] /写真馆：未能从消息中解析出文章ID")
-            yield event.plain_result("用法：/写真馆 <ID>，例如 /写真馆 12345")
+            yield event.plain_result(
+                "用法：/写真馆 <ID或链接>，例如 /写真馆 171317 "
+                "或 /写真馆 https://kkmzt.com/photo/171317"
+            )
             return
-        logger.info(f"[涩批DEBUG] /写真馆：开始获取文章ID={article_id}")
+        article_id, kind = ref
+        logger.info(
+            f"[涩批DEBUG] /写真馆：开始获取文章ID={article_id} kind={kind}"
+        )
         yield event.plain_result("正在搜索，请稍等...")
-        async for result in self._send_mzt_album(event, article_id):
+        async for result in self._send_mzt_album(event, article_id, kind=kind):
+            yield result
+
+    @filter.command("潮拍馆", priority=20)
+    async def sp_mzt_beauty(self, event: AstrMessageEvent):
+        """获取妹子图潮拍馆图集（/潮拍馆 <ID或链接>）"""
+        self.mark_event_consumed(event)
+        if not await self.guard(event):
+            return
+
+        ref = parse_article_ref(event.get_message_str())
+        # 未写出 ID 时按潮拍馆默认解析裸 ID
+        if not ref:
+            logger.info("[涩批DEBUG] /潮拍馆：未能从消息中解析出文章ID")
+            yield event.plain_result(
+                "用法：/潮拍馆 <ID或链接>，例如 /潮拍馆 191566 "
+                "或 /潮拍馆 https://kkmzt.com/beauty/191566"
+            )
+            return
+        article_id, _kind = ref
+        logger.info(f"[涩批DEBUG] /潮拍馆：开始获取文章ID={article_id}")
+        yield event.plain_result("正在搜索，请稍等...")
+        async for result in self._send_mzt_album(event, article_id, kind="beauty"):
             yield result
 
     @filter.command("随机写真", priority=25)

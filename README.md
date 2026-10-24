@@ -36,7 +36,8 @@
 │   ├── pixiv.py                  # P 站接口客户端（含订阅查询）
 │   ├── verify.py                 # 验车（磁力详情）
 │   ├── magnetcat.py              # 磁力猫搜索
-│   ├── mzt.py                    # 妹子图解析
+│   ├── mzt.py                    # 妹子图解析（写真馆 / 潮拍馆）
+│   ├── mzt_crypto.py             # 妹子图图片接口解密（网页 GCM / APP AES-CBC）
 │   └── mtb.py                    # 美图吧（ku1373）解析
 └── features/                          # 🎯 功能模块：一个功能一个文件
     ├── _base.py                  # 各功能模块的基类
@@ -80,7 +81,7 @@ AstrBot 会自动读取 `requirements.txt` 安装依赖；也可以手动执行�
 pip install aiohttp pyyaml playwright Pillow
 ```
 
-### 3. 安装浏览器内核（**磁力猫 / 验车 / 妹子图 / 美图吧 必须**）
+### 3. 安装浏览器内核（**磁力猫 / 验车 / 美图吧 必须，妹子图仅兜底需要**）
 
 这几个功能需要抓取网页，依赖 Playwright：
 
@@ -88,8 +89,9 @@ pip install aiohttp pyyaml playwright Pillow
 playwright install chromium
 ```
 
-> 如果只使用 P 站图片、网址导航、2图/3图、视频、订阅推送，可以不装浏览器内核。
-> 用到爬网页的指令时，如果缺少内核，插件会返回明确的提示而不会崩溃。
+> 妹子图已改为**优先直连 APP/站点接口**（`aiohttp`），只有接口被 Cloudflare 拦截时才会用到
+> 浏览器兜底；如果不需要磁力猫 / 验车 / 美图吧，可以不装浏览器内核。
+> 用到需要浏览器的指令时，如果缺少内核，插件会返回明确的提示而不会崩溃。
 
 ### 4. 重载插件
 
@@ -136,9 +138,16 @@ playwright install chromium
 
 | 指令 | 说明 |
 | --- | --- |
-| `/写真馆 12345` | 按 ID 获取写真（最多 20 张） |
+| `/写真馆 12345` 或 `/写真馆 https://kkmzt.com/photo/12345` | 按 ID / 链接获取写真 |
+| `/潮拍馆 12345` 或 `/潮拍馆 https://kkmzt.com/beauty/12345` | 按 ID / 链接获取潮拍馆图集 |
 | `/随机写真` | 从已保存的 ID 里随机取一个 |
 | `/更新写真ID` | 增量更新 ID 列表（**仅主人可用**） |
+
+> 妹子图现在**优先直连官方 APP 图片接口**（`api.iimzt.com`，mTLS 客户端证书 + 全量图片），
+> APP 接口不可用时自动回退网页接口，再失败才回退 Playwright 浏览器。
+> 网页接口下潮拍馆（`/beauty/`）为全量；写真馆（`/photo/`）被站点限制为
+> **前 20 张预览**（插件会如实标注 `20/57` 这类数量）。
+> 详细逆向说明见下方 [「妹子图图片接口逆向说明」](#妹子图图片接口逆向说明)。
 
 ### P 站（`features/pixiv_pid.py` / `pixiv_artist.py` / `pixiv_tag.py`）
 
@@ -190,6 +199,61 @@ playwright install chromium
 
 > 群聊与私聊都支持订阅（原插件只支持群聊）。
 
+### 妹子图图片接口逆向说明
+
+2026-10 对站点前端 JS（`post.js` / `main.js`，javascript-obfuscator 混淆）以及官方
+Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn 模拟 `libsec.so`
+解出 RC4 密钥后全部还原）的逆向结论：
+
+#### 1. 网页端接口（kkmzt.com，兜底）
+
+* 文章页 `https://kkmzt.com/photo/{id}`（写真馆）与 `https://kkmzt.com/beauty/{id}`（潮拍馆）
+  的 HTML 里只有第一张图，其余图片由 JS 异步拉取；
+* 图片列表接口：`GET https://kkmzt.com/app/post/p?id={文章ID}` → `{"data": "<base64>"}`；
+* 解密流程：
+  1. base64 解码后拆分：`salt = raw[0:16]`、`iv = raw[16:28]`、`密文 + 16 字节 GCM tag = raw[28:]`；
+  2. `HKDF-SHA256(ikm = str(文章ID), salt = salt, info = b"")` 派生 32 字节密钥；
+  3. `AES-256-GCM` 解密得到图片**文件名**数组；
+  4. 完整图片 URL = 文章页首图目录 + 文件名
+     （写真馆如 `https://f.meizitu.net/image/2026/04/`，潮拍馆为 `https://f.meizitu.net/mw1024/`）。
+* 写真馆（`/photo/`）的网页接口被服务端限制为**前 20 张**（页面上会提示“预览结束，安装美之图APP，免费观赏全片”）；
+  潮拍馆（`/beauty/`）网页端没有这个限制，就是全量。
+
+#### 2. APP 端接口（api.iimzt.com，优先，全量）
+
+* 逆向自解密后的 widget JS：`GET https://api.iimzt.com/app/post/p?id={文章ID}`
+  （基址来自 `script/utils.js getApiUrl()`，可被 `https://ini.iimzt.com/data/init.json` 的 `api` 字段覆盖）；
+* **必须携带 APP 内置的 mTLS 客户端证书**：APK 的 `assets/widget/res/config` 是
+  PKCS#12 客户端证书（`CN=AB Client`，密码在解密后的 `res/key.xml` 的 `key` 字段），
+  APP 启动时通过 `api.applyCertificates` 安装；**没有证书时 Cloudflare 会对
+  `api.iimzt.com` 直接返回 403**（普通请求、浏览器、脚本都一样）。
+  插件会从本地文件 `app_core/mzt_client.pem` 读取该证书（证书+私钥，**不随仓库分发**，避免泄露 APP 凭据）；
+  本地没有该文件时插件会自动回退网页接口。
+* 响应同样是 `{"data": "<payload>"}`，但 payload 是 **hex 字符串**（不是 base64），
+  hex 解码后是 **AES-128-CBC + PKCS7** 密文：
+  * `key = md5(str(文章ID)).hexdigest()[8:24].lower()`（16 个 ASCII 字符）
+  * `iv = 0809060801020609`（来自 APP 解密后的 `res/key.xml`）
+* 明文是 JSON **对象**：
+  `{"id","date","title","count","thumb","thumbs","images","model","desc",...}`，
+  `images` 是**带 `?sign=` 的完整图片 URL**（`https://ap.iimzt.com/...jpg?sign=...`），
+  `count` 即全量张数（写真馆也是全量 —— 这就是网页端 20 张限制的根因）；
+* 高清图（APP 的 toggleHD）分两种：
+  * 写真馆：`https://ap.iimzt.com/...jpg` → `https://ax.iimzt.com/...jpg`
+    + `?sign=base64url_nopad(md5("auavax" + path))`（`axkey` 来自 `res/key.xml`）；
+  * 潮拍馆（响应带 `thumbs` 列表）：`mw1024` → `mw2000`（新浪图床）。
+  插件配置项 `mzt_hd` 控制是否使用高清地址。
+
+#### 3. 插件实现
+
+* `app_core/mzt_crypto.py`：同时支持网页端 GCM（base64）与 APP 端 CBC（hex）两种格式
+  （按编码/长度自动识别，失败会换另一种重试）；优先用 `cryptography`，未安装时退回
+  纯 Python AES 实现（无需新增依赖）。
+* `app_core/mzt.py`：优先 APP 接口（mTLS 全量）→ 网页接口（写真馆 20 张预览）→
+  Playwright 页面内 fetch + WebCrypto 兜底；图集信息里会显示数据源与 `已获取/总数`。
+> 说明：mTLS 证书来自官方 APP，放在本地 `app_core/mzt_client.pem` 即可（不要提交到仓库）；
+> 若官方后续更换证书，`api.iimzt.com` 会重新 403，此时插件自动回退到网页接口，
+> 需要从新版 APK 重新提取证书。
+
 ### 设置（`features/recall.py`，**仅主人可用**）
 
 | 指令 | 说明 |
@@ -212,6 +276,10 @@ playwright install chromium
 | `magnet_api` | `https://whatslink.info/api/v1/link` | 验车接口 |
 | `magnet_cat_sites` | 4 个镜像站 | 磁力猫镜像，失效时可自行更换 |
 | `mzt_site` | `https://kkmzt.com` | 妹子图站点 |
+| `mzt_app_api` | `https://api.iimzt.com/app/` | 美之图 APP 图片接口（全量）；留空则只用网页接口 |
+| `mzt_hd` | `false` | APP 接口图片是否转高清（写真馆 ax+sign / 潮拍馆 mw2000，流量更大） |
+| `mzt_max_images` | `0` | 妹子图单次最多抓取张数，0 表示不限制 |
+| `mzt_browser_fallback` | `true` | 妹子图直连接口失败时回退 Playwright |
 | `mtb_site` | `https://www.ku1373.cc` | 美图吧站点 |
 | `cos_api` | `https://img.mengxix.top/` | 2图/3图接口 |
 | `url_groups` | 6 组网址 | 网址导航内容 |
@@ -313,6 +381,18 @@ A：多为图床风控。可以尝试关闭 `track_pixel`，或调大 `download_
 
 **Q：磁力猫搜索失败？**
 A：镜像站域名变化很频繁，把 `magnet_cat_sites` 换成当前可用的域名即可。
+
+**Q：为什么 `/写真馆` 只发 20 张图？**
+A：分两种情况：
+① 正常情况下插件会优先调用官方 APP 接口（`mzt_app_api`，默认 `https://api.iimzt.com/app/`），
+   写真馆也能拿到**全量**（图集信息里会显示“数据源: 美之图 APP 接口（全量）”）；
+② 如果只显示 20 张且标注“网页接口仅提供前 20 张预览”，说明 APP 接口暂时不可用
+   （网络/Cloudflare/接口变更），此时插件已自动退回网页接口，网页端被站点限制为前 20 张。
+   可检查 `mzt_app_api` 配置，或稍后重试；潮拍馆（`/潮拍馆`、`/beauty/` 链接）网页端本来就是全量。
+
+**Q：妹子图提示“连接网页失败”？**
+A：站点/APP 接口使用 Cloudflare，短时间频繁请求可能被临时限制（HTTP 403）。可以稍等几分钟再试；
+插件默认会先直连 APP/网页接口，失败后自动回退 Playwright 浏览器。若浏览器也没安装，按上面安装内核即可。
 
 **Q：P 站接口报错 / 返回格式异常？**
 A：`pixiv_api_base` 使用的是第三方接口，接口失效时更换为可用接口。

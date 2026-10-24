@@ -40,6 +40,30 @@
     "type": "string",
     "default": "https://kkmzt.com"
   },
+  "mzt_app_api": {
+    "description": "美之图 APP 图片接口基址",
+    "type": "string",
+    "default": "https://api.iimzt.com/app/",
+    "hint": "官方 APP 使用的全量图片接口（逆向得到）。留空表示不使用 APP 接口、只走网页接口（写真馆会被限制为前 20 张）。"
+  },
+  "mzt_hd": {
+    "description": "妹子图获取高清原图",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后对 APP 接口返回的 /ap 图片追加高清签名，改用 /ax 高清地址（流量更大，发送前仍会压缩）。"
+  },
+  "mzt_max_images": {
+    "description": "妹子图单次最多抓取的图片数",
+    "type": "int",
+    "default": 0,
+    "hint": "0 表示不限制（潮拍馆可拿到全量，写真馆最多为网页接口允许的 20 张预览）。"
+  },
+  "mzt_browser_fallback": {
+    "description": "妹子图直连接口失败时回退浏览器",
+    "type": "bool",
+    "default": true,
+    "hint": "直连 kkmzt.com 接口被 Cloudflare 拦截时，自动用 Playwright 在页面内请求接口并解密。"
+  },
   "mtb_site": {
     "description": "美图吧（ku1373）站点地址",
     "type": "string",

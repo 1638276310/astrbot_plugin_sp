@@ -1,10 +1,11 @@
-"""功能：妹子图（kkmzt）写真。
+"""功能：妹子图（kkmzt / 美之图）写真与潮拍。
 
 对应原 ``mzt.js``：
 
-* ``/写真馆 <ID>``  —— 获取指定写真（建议空格分隔，连写也兼容）
-* ``/随机写真``    —— 随机取一个已保存的 ID
-* ``/更新写真ID``  —— 增量更新 ID 列表（仅主人可用）
+* ``/写真馆 <ID或链接>``  —— 获取指定写真（也支持 /beauty 链接）
+* ``/潮拍馆 <ID或链接>``  —— 获取潮拍馆图集（网页端为全量图片）
+* ``/随机写真``          —— 随机取一个已保存的 ID
+* ``/更新写真ID``        —— 增量更新 ID 列表（仅主人可用）
 
 指令 handler 由主类 main.py 注册（与 get_px 同构），
 本文件保留业务方法。
@@ -16,7 +17,7 @@ from astrbot.api import logger # type: ignore
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._base import spFeature
-from ..app_core.mzt import collect_article_ids, fetch_album, parse_article_id
+from ..app_core.mzt import collect_article_ids, fetch_album
 from ..app_core.storage import load_json, save_json
 
 
@@ -40,13 +41,20 @@ class MztFeature(spFeature):
     # ------------------------------------------------------------------ #
     # 内部实现
     # ------------------------------------------------------------------ #
-    async def _send_mzt_album(self, event: AstrMessageEvent, article_id: str):
-        """解析并发送一个写真页。"""
-        logger.info(f"[涩批DEBUG] _send_mzt_album：开始解析文章ID={article_id}")
-        progress = self.make_console_progress(f"写真 {article_id}")
+    async def _send_mzt_album(
+        self, event: AstrMessageEvent, article_id: str, kind: str = "photo"
+    ):
+        """解析并发送一个写真/潮拍图集。"""
+        logger.info(
+            f"[涩批DEBUG] _send_mzt_album：开始解析文章ID={article_id} kind={kind}"
+        )
+        progress = self.make_console_progress(f"{kind} {article_id}")
         try:
             album = await fetch_album(
-                self.settings, article_id, progress=progress["parse"]
+                self.settings,
+                article_id,
+                kind=kind,
+                progress=progress["parse"],
             )
         except Exception as exc:
             logger.error(
@@ -60,15 +68,41 @@ class MztFeature(spFeature):
             yield event.plain_result("没有找到任何图片，请稍后再试。")
             return
 
+        # 图片 Referer 策略（由 AlbumInfo.image_referer 决定）：
+        # * 网页端写真馆：带站点 Referer；
+        # * 网页端/APP 潮拍馆：网页端 f.meizitu.net 不需要 Referer，
+        #   APP 端新浪图床（tva1.sinaimg.cn）需要 https://weibo.com/ 防盗链 Referer；
+        # * APP 端写真馆（ap/ax.iimzt.com）：不需要 Referer。
+        referer = getattr(album, "image_referer", None)
         logger.info(
-            f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 共 {len(album.image_urls)} 张图片，开始下载"
+            f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 共 "
+            f"{len(album.image_urls)} 张图片（总数 {album.total or '未知'}，"
+            f"数据源={album.source}，预览截断={album.truncated}），"
+            f"referer={referer!r}，开始下载"
         )
         paths = await self.download_images(
             album.image_urls,
-            referer=self.settings.mzt_site,
+            referer=referer,
             prefix="mzt",
             progress=progress["download"],
         )
+        if not paths and album.image_urls:
+            # 图床 Referer 策略可能随站点调整，失败时用相反策略重试一次
+            alt_referer = (
+                None
+                if referer == self.settings.mzt_site
+                else self.settings.mzt_site
+            )
+            logger.info(
+                f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 首次下载全部失败，"
+                f"改用 referer={alt_referer!r} 重试"
+            )
+            paths = await self.download_images(
+                album.image_urls,
+                referer=alt_referer,
+                prefix="mzt",
+                progress=progress["download"],
+            )
         if not paths:
             logger.warning(f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 图片全部下载失败")
             yield event.plain_result("图片下载失败，请稍后再试。")
