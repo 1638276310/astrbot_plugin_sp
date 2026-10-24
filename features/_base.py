@@ -164,10 +164,12 @@ class spFeature(MessageMixin, AdminMixin):
         referer: str | None = None,
         prefix: str = "img",
         progress: Callable[[int, int], Awaitable[None]] | None = None,
+        proxy: str | None = None,
     ) -> list[str]:
         """并发下载图片到临时目录，返回本地路径列表（失败项跳过）。
 
-        referer 用于部分图床的防盗链校验。
+        referer 用于部分图床的防盗链校验；proxy 透传到图片下载（被 Cloudflare
+        按 IP 拦截时需要与抓取使用同一代理）。
         传入 ``progress`` 回调时，每当下载进度跨过一个新的 10% 里程碑
         （10%、20% ... 100%）时调用一次 ``await progress(已完成数, 总数)``，
         用于控制台实时输出下载进度；不传则行为与原来完全一致。
@@ -217,6 +219,7 @@ class spFeature(MessageMixin, AdminMixin):
                     url,
                     referer=referer,
                     timeout=self.settings.download_timeout,
+                    proxy=proxy,
                 )
                 if not data:
                     logger.info(

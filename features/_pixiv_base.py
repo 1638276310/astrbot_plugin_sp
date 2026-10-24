@@ -34,12 +34,13 @@ class PixivBase(spFeature):
         referer: str | None = None,
         prefix: str = "pixiv",
         progress: ProgressCallback | None = None,
+        proxy: str | None = None,
     ) -> list[str]:
         """P 站图片下载（在基类实现之上补一行日志）。
 
         注意：在 ``spPlugin`` 的 MRO 里 ``PixivBase`` 排在 ``spFeature``
         之前，所以这个方法会覆盖 ``spFeature.download_images``——参数签名
-        必须和基类保持同步（尤其是 ``progress``），并原样透传给
+        必须和基类保持同步（尤其是 ``progress`` / ``proxy``），并原样透传给
         ``super().download_images``。否则 MtbFeature / MztFeature 里
         ``download_images(..., progress=...)`` 的调用会抛
         ``TypeError: got an unexpected keyword argument 'progress'``。
@@ -50,7 +51,7 @@ class PixivBase(spFeature):
             f"prefix={prefix!r}，referer={referer!r}"
         )
         return await super().download_images(
-            urls, referer=referer, prefix=prefix, progress=progress
+            urls, referer=referer, prefix=prefix, progress=progress, proxy=proxy
         )
 
     @staticmethod

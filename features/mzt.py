@@ -17,7 +17,11 @@ from astrbot.api import logger # type: ignore
 from astrbot.api.event import AstrMessageEvent, filter # type: ignore
 
 from ._base import spFeature
-from ..app_core.mzt import collect_article_ids, fetch_album
+from ..app_core.mzt import (
+    collect_article_ids,
+    fetch_album,
+    format_fetch_error,
+)
 from ..app_core.storage import load_json, save_json
 
 
@@ -57,10 +61,14 @@ class MztFeature(spFeature):
                 progress=progress["parse"],
             )
         except Exception as exc:
+            # 只记录异常类型 + 脱敏后的摘要；错误文案前缀保持与旧版一致，
+            # 括号内是结构化阶段错误（如 APP接口:HTTP 403；浏览器:Cloudflare 拦截 Ray ID ...）。
+            summary = format_fetch_error(exc)
             logger.error(
-                f"[涩批DEBUG] _send_mzt_album：解析文章ID={article_id} 失败：{exc!r}"
+                f"[涩批DEBUG] _send_mzt_album：解析文章ID={article_id} "
+                f"失败（{type(exc).__name__}）：{summary}"
             )
-            yield event.plain_result(f"连接网页失败，请稍后再试（{exc}）")
+            yield event.plain_result(f"连接网页失败，请稍后再试（{summary}）")
             return
 
         if not album.image_urls:
@@ -74,17 +82,20 @@ class MztFeature(spFeature):
         #   APP 端新浪图床（tva1.sinaimg.cn）需要 https://weibo.com/ 防盗链 Referer；
         # * APP 端写真馆（ap/ax.iimzt.com）：不需要 Referer。
         referer = getattr(album, "image_referer", None)
+        # 图片 CDN 与站点同样可能被 Cloudflare 按 IP 拦截：与抓取共用 mzt_proxy
+        proxy = self.settings.mzt_proxy or None
         logger.info(
             f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 共 "
             f"{len(album.image_urls)} 张图片（总数 {album.total or '未知'}，"
             f"数据源={album.source}，预览截断={album.truncated}），"
-            f"referer={referer!r}，开始下载"
+            f"referer={referer!r}，proxy={'on' if proxy else 'off'}，开始下载"
         )
         paths = await self.download_images(
             album.image_urls,
             referer=referer,
             prefix="mzt",
             progress=progress["download"],
+            proxy=proxy,
         )
         if not paths and album.image_urls:
             # 图床 Referer 策略可能随站点调整，失败时用相反策略重试一次
@@ -102,6 +113,7 @@ class MztFeature(spFeature):
                 referer=alt_referer,
                 prefix="mzt",
                 progress=progress["download"],
+                proxy=proxy,
             )
         if not paths:
             logger.warning(f"[涩批DEBUG] _send_mzt_album：文章ID={article_id} 图片全部下载失败")

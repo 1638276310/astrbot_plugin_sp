@@ -24,6 +24,8 @@
 │   ├── help.png                  # /涩批图片帮助 发送的新版完整帮助长图
 │   ├── mzt_client.pem            # APP 接口 mTLS 客户端证书（随仓库附带，克隆即可用）
 │   └── 说明.txt                  # 帮助图说明
+├── tools/
+│   └── mzt_diag.py               # 妹子图 403 / Cloudflare / 代理 / 证书诊断脚本（独立运行）
 ├── app_core/                         # 公共能力（一个文件一件事）
 │   ├── paths.py                  # 数据/临时/资源目录
 │   ├── settings.py               # 配置读取 + 上游接口与常量
@@ -256,6 +258,83 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
 > 需要从新版 APK 重新提取证书。
 > 提示：若本仓库为公开仓库，该客户端证书也会随之公开；介意的话可将仓库设为私有。
 
+### 403 / Cloudflare 排查与代理（`app_core/mzt.py`）
+
+> 实测结论（2026-10）：同一出口 IP 下，Python 直连文章页 / 网页接口 / mTLS APP 接口 /
+> 图片 CDN 全部 200，而无头 Chromium 打开文章页被 Cloudflare 直接 403。
+> **被 CF 拦截时不要试图“魔法绕过”，优先换可用出口（代理）并确保证书/会话/请求头正确。**
+
+#### 1. 降级顺序与日志
+
+`/写真馆`、`/潮拍馆` 会按以下顺序尝试（与 JS 版一致）：
+
+1. **APP 接口**（`mzt_app_api`，mTLS 客户端证书，全量）；
+2. **网页接口**（同一个 HTTP 会话先 GET 文章页、再 GET `/app/post/p?id=`，共享 Cookie，
+   带文章页 Referer）；
+3. **浏览器兜底**（Playwright：`zh-CN` + 统一 Chrome UA + stealth 参数 → 打开文章页 →
+   识别 Cloudflare 挑战并等待 `mzt_cf_wait` 秒 → 页面内 fetch 解密 → `context.request` 兜底）；
+4. **文章页首图兜底**：直连已拿到文章页 `first_image` 但 1~3 全失败时，只返回一张首图，
+   消息头标注“网页首图兜底”，不会让指令直接报错。
+
+每个阶段都会输出一行 info 日志（URL 已去掉 `sign` 等 query 值）：
+
+```
+[mzt] stage=article url=https://kkmzt.com/photo/171317 status=200 cf-ray=... elapsed=412ms
+[mzt] stage=app url=https://api.iimzt.com/app/post/p?id=171317 status=403 cf-ray=... elapsed=380ms
+[mzt] stage=web url=https://kkmzt.com/app/post/p?id=171317 status=403 cf-ray=... elapsed=301ms
+[mzt] stage=browser url=https://kkmzt.com/photo/171317 status=403 cf-ray=... challenge=blocked elapsed=1201ms
+[mzt] result source=page images=1 total=57 truncated=true
+```
+
+失败时用户看到的文案前缀不变，括号内是结构化阶段摘要：
+
+```
+连接网页失败，请稍后再试（APP接口:HTTP 403；网页接口:HTTP 403；浏览器:Cloudflare 拦截 Ray ID a4f7cd28bf6de196；可在配置 mzt_proxy 使用可用代理后重试）
+```
+
+#### 2. 配置项
+
+| 配置项 | 用法 |
+| --- | --- |
+| `mzt_proxy` | 直连、浏览器兜底与图片下载都走该代理，如 `http://127.0.0.1:7890` 或 `http://user:pass@host:port`。**部署机是机房 IP 被 Cloudflare 整段拦截时，这是唯一有效手段；图片 CDN 往往同样被按 IP 拦截，所以下载也复用同一代理。** 改完重载插件即可。 |
+| `mzt_ua` | 留空使用内置 Chrome/124 UA；浏览器兜底是 Chromium，**不要**填 Firefox/Safari UA。 |
+| `mzt_cf_wait` | 浏览器打开文章页后等待 CF 挑战通过的最长秒数，默认 8；0 表示不等待。 |
+| `mzt_app_cert` | APP 接口 mTLS 证书路径。留空自动查找 `assets/mzt_client.pem` → `app_core/mzt_client.pem`；也可填绝对路径或相对插件根目录的路径。PEM 必须**同时包含** CERTIFICATE 与 PRIVATE KEY，否则日志会记 `stage=cert ... cert-invalid:*`。 |
+
+> 证书缺失/无效时 APP 接口必然被 Cloudflare 403（这**不是** IP 问题）；
+> 确认 `assets/mzt_client.pem` 已随插件一起上传，或在 `mzt_app_cert` 指定正确路径。
+
+#### 3. 独立诊断脚本
+
+不依赖 AstrBot 启动，直接看出口 IP / DNS / 时间 / 证书 / 四段链路 / headless 是否被拦：
+
+```bash
+# 在插件根目录（astrbot_plugin_sp/）执行
+python tools/mzt_diag.py --id 171317
+python tools/mzt_diag.py --id 171317 --json > mzt_diag.json
+python tools/mzt_diag.py --id 171317 --proxy http://127.0.0.1:7890
+python tools/mzt_diag.py --id 171317 --cert /path/to/mzt_client.pem --no-browser
+```
+
+输出已脱敏（无 Cookie / 证书内容 / `sign=` 值），其中：
+
+* `egress.ip / loc / colo`：实际出口 IP 与 Cloudflare 处理节点；
+* `http_chain.article / web_api / app_api / image_cdn`：状态码、`cf_ray`、耗时、解密张数；
+* `certificates`：候选路径、PEM 是否完整、能否 `load_cert_chain`；
+* `playwright`：headless 是否被 CF 拦截（`blocked` + `cf_ray`）；
+* `summary.likely_cause`：一句话判断（例如“文章页被 Cloudflare 拦截，优先配置 mzt_proxy”）。
+
+#### 4. 常见处理
+
+* **文章页 200、APP 403**：证书没加载（看 `certificates` / `stage=cert`），或证书被官方更换；
+* **文章页 403 + `cf-ray`**：出口被 CF 风控 → 配置 `mzt_proxy` 后重跑诊断，确认出口 IP 已变化；
+* **无头浏览器始终 403**：Cloudflare 对自动化指纹的硬拦截，属预期行为，插件会记录 Ray ID 并继续降级；
+* **同一篇连续失败**：进程内 3 秒限速（日志 `[mzt] rate-limit wait=...ms`），不要连续狂刷。
+
+> 直连与浏览器均已统一发 `Accept-Language: zh-CN`、`Sec-Fetch-*`、文章页 Referer；
+> 浏览器启动参数含 `--disable-blink-features=AutomationControlled`，并在
+> `add_init_script` 里把 `navigator.webdriver` 置为 undefined。
+
 ### 设置（`features/recall.py`，**仅主人可用**）
 
 | 指令 | 说明 |
@@ -282,6 +361,10 @@ Android APP（美之图 3.8.7，APICloud 混合应用，widget JS 已用 unicorn
 | `mzt_hd` | `false` | APP 接口图片是否转高清（写真馆 ax+sign / 潮拍馆 mw2000，流量更大） |
 | `mzt_max_images` | `0` | 妹子图单次最多抓取张数，0 表示不限制 |
 | `mzt_browser_fallback` | `true` | 妹子图直连接口失败时回退 Playwright |
+| `mzt_proxy` | 空 | 妹子图统一代理（直连 + 浏览器兜底 + 图片下载），如 `http://127.0.0.1:7890`；空 = 直连 |
+| `mzt_ua` | 空 | 覆盖统一浏览器 UA；空 = 内置 Chrome/124 UA |
+| `mzt_cf_wait` | `8` | 浏览器兜底等待 Cloudflare 挑战通过的最长秒数 |
+| `mzt_app_cert` | 空 | mTLS 客户端证书路径；空 = 依次查找 `assets/mzt_client.pem`、`app_core/mzt_client.pem` |
 | `mtb_site` | `https://www.ku1373.cc` | 美图吧站点 |
 | `cos_api` | `https://img.mengxix.top/` | 2图/3图接口 |
 | `url_groups` | 6 组网址 | 网址导航内容 |
@@ -393,8 +476,12 @@ A：分两种情况：
    可检查 `mzt_app_api` 配置，或稍后重试；潮拍馆（`/潮拍馆`、`/beauty/` 链接）网页端本来就是全量。
 
 **Q：妹子图提示“连接网页失败”？**
-A：站点/APP 接口使用 Cloudflare，短时间频繁请求可能被临时限制（HTTP 403）。可以稍等几分钟再试；
-插件默认会先直连 APP/网页接口，失败后自动回退 Playwright 浏览器。若浏览器也没安装，按上面安装内核即可。
+A：站点/APP 接口使用 Cloudflare。新版错误文案会带各阶段状态码与 Ray ID，例如
+`连接网页失败，请稍后再试（APP接口:HTTP 403；网页接口:HTTP 403；浏览器:Cloudflare 拦截 Ray ID ...）`。
+处理顺序：① 先在插件根目录跑 `python tools/mzt_diag.py --id 171317` 看 `summary.likely_cause`；
+② APP 接口 403 多为证书未加载，检查 `assets/mzt_client.pem` 或配置 `mzt_app_cert`；
+③ 文章页也 403 时配置 `mzt_proxy`（住宅/可用代理）后重试；
+④ 详见上方 [「403 / Cloudflare 排查与代理」](#403--cloudflare-排查与代理app_coremztpy)。
 
 **Q：P 站接口报错 / 返回格式异常？**
 A：`pixiv_api_base` 使用的是第三方接口，接口失效时更换为可用接口。

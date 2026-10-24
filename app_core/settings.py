@@ -156,6 +156,15 @@ class PluginSettings:
         # 0 = 不限制（抓取接口能返回的全部图片）；>0 时只取前 N 张
         self.mzt_max_images = max(0, self._int("mzt_max_images", 0))
         self.mzt_browser_fallback = self._bool("mzt_browser_fallback", True)
+        # 403/Cloudflare 修复相关（详见 README「403 / Cloudflare 排查与代理」）：
+        # 统一代理（直连 + 浏览器都走它）；空 = 直连。
+        self.mzt_proxy = self._opt_str("mzt_proxy", "")
+        # 覆盖统一浏览器 UA；空 = 内置 Chrome UA（不再随机混用 Firefox/Safari）。
+        self.mzt_ua = self._opt_str("mzt_ua", "")
+        # 浏览器打开文章页后等待 Cloudflare 挑战通过的最长秒数。
+        self.mzt_cf_wait = min(60, max(0, self._int("mzt_cf_wait", 8)))
+        # mTLS 客户端证书路径；空 = 按 assets/mzt_client.pem → app_core/mzt_client.pem 查找。
+        self.mzt_app_cert = self._opt_str("mzt_app_cert", "")
         self.mtb_site = self._str("mtb_site", DEFAULT_MTB_SITE).rstrip("/")
         self.cos_api = self._str("cos_api", DEFAULT_COS_API)
         self.sp_video_urls = self._list("sp_video_urls", DEFAULT_VIDEO_URLS)
@@ -199,6 +208,11 @@ class PluginSettings:
             return default
         text = str(value).strip()
         return text or default
+
+    def _opt_str(self, key: str, default: str = "") -> str:
+        """允许空字符串的字符串配置（空值表示“未设置”，不回退默认值）。"""
+        value = self._raw.get(key, default)
+        return "" if value is None else str(value).strip()
 
     def _int(self, key: str, default: int) -> int:
         try:

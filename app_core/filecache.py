@@ -66,8 +66,13 @@ class FileCache:
         referer: str | None = None,
         timeout: int = 20,
         use_memory: bool = True,
+        proxy: str | None = None,
     ) -> bytes | None:
-        """获取 URL 内容，命中缓存则直接返回。失败返回 None。"""
+        """获取 URL 内容，命中缓存则直接返回。失败返回 None。
+
+        ``proxy`` 透传给 ``fetch_bytes``：站点被 Cloudflare 按 IP 拦截时，
+        图片 CDN 往往同样需要走代理下载。
+        """
         key = sha1_of(url.encode("utf-8"))
         if use_memory and key in self._memory:
             _dbg(f"filecache.get：内存缓存命中 {url[:80]}")
@@ -102,7 +107,9 @@ class FileCache:
                     pass
             _dbg(f"filecache.get：即将调用 fetch_bytes 下载 {url[:80]}")
             try:
-                data = await fetch_bytes(url, timeout=timeout, referer=referer)
+                data = await fetch_bytes(
+                    url, timeout=timeout, referer=referer, proxy=proxy
+                )
                 _dbg(f"filecache.get：下载成功 {url[:80]} 共 {len(data)} 字节")
             except Exception as exc:
                 _dbg(f"filecache.get：下载失败 {url[:80]}（timeout={timeout}s）：{exc!r}")
