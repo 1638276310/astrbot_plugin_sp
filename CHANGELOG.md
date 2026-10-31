@@ -1,0 +1,487 @@
+## v1.0.0 — AstrBot 版首发
+
+> 本版本由 TRSS-Yunzai JS 插件重构为 AstrBot Python 插件，以下为 Python 版 1.0.0 包含的全部功能。
+
+### 🚀 核心功能
+- 磁力猫资源搜索与解析，支持 `SP_MZT_PROXY` 显式代理出口
+- 美之图 APP 全量图片接口（mTLS 客户端证书 + AES-CBC 解密）
+- 套图解析与批量下载，支持进度回调与控制台日志
+- Pixiv 标签 / 画师 / PID 检索与下载
+- 涩批图片暗黑赛博朋克风格帮助长图（中文字体自动安装）
+- 持久化数据目录管理与自动迁移、审计可追溯
+- 内置静态种子数据，修复磁力猫 / 套图链路
+- 定时任务调度与事件停止处理
+
+### 🐛 已修复
+- 写真馆图片接口 403 与浏览器兜底失败
+- 图片下载被截断、发送体积过大（下载后统一压缩再发送）
+- 解密失败日志参数 TypeError，加固缓存与可选依赖兜底
+- PixivBase.download_images 缺少 progress 参数导致套图/写真下载报错
+- 多段回复被截断，确保指令正常消费
+
+### ♻️ 重构与优化
+- 移除网页直连，改为 ID → APP 接口 → 解密链路
+- 重写诊断脚本为 APP 接口 / 证书 / 出口探测
+- 统一数据目录获取方式，增强 AstrBot 兼容性
+- 命令前缀由 `#` 统一为 `/`
+
+### 📝 文档
+- 妹子图链路、403 排查与配置说明
+- README 安装、配置与友链
+
+<details>
+<summary>📜 开发过程存档（Python 版重构期原始 commit 记录，点击展开）</summary>
+
+> 以下为 Python 版重构期间的全部原始 commit，按时间倒序排列。
+> 正式版本从 v1.0.0 起，此前记录仅作开发过程存档。
+
+- 2026-10-31 15:17 🐛 fix: 更新磁力猫镜像站列表以确保可用性 (ab141f4)
+  - `_conf_schema.json`
+  - `app_core/settings.py`
+- 2026-10-29 23:35 ✨ feat(mzt): 支持 SP_MZT_PROXY 显式代理出口 (9551de7)
+  - `README.md`
+  - `app_core/http.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/settings.py`
+  - `features/mzt.py`
+  - `tools/mzt_diag.py`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-29 16:56 ✨ feat(help): 更新暗黑赛博朋克风格帮助图 (265a021)
+  - `assets/help.png`
+- 2026-10-29 14:55 ✨ feat: 内置静态种子数据并修复磁力猫/套图链路 (73a7e42)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/magnetcat.py`
+  - `app_core/message.py`
+  - `app_core/mtb.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/settings.py`
+  - `app_core/verify.py`
+  - `assets/help.png`
+  - `assets/jg.json`
+  - `assets/mztids.json`
+  - `features/help.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_tag.py`
+  - `main.py`
+  - `metadata.yaml`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-29 12:03 fix(mzt): 修复解密失败日志参数 TypeError，加固缓存与可选依赖兜底 (4c90495)
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `app_core/mzt_crypto.py`
+  - `app_core/paths.py`
+  - `app_core/render.py`
+  - `features/_base.py`
+  - `tools/mzt_diag.py`
+- 2026-10-25 16:51 🔧 chore(astrbot_plugin_sp): 规范复查修复 137 项并同步文档，自检脚本导入补 type: ignore (1bb8949)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/imaging.py`
+  - `app_core/magnetcat.py`
+  - `app_core/message.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/render.py`
+  - `app_core/scheduler.py`
+  - `app_core/settings.py`
+  - `app_core/storage.py`
+  - `app_core/verify.py`
+  - `assets/help.png`
+  - `assets/说明.txt`
+  - `features/__init__.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/help.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `main.py`
+  - `metadata.yaml`
+  - `requirements.txt`
+  - `tools/mzt_diag.py`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-25 12:22 fix(mzt): 改为设备本机 IP 直连并补全 TLS 证书链 (d2acdbf)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `app_core/settings.py`
+  - `features/mzt.py`
+  - `metadata.yaml`
+  - `tools/mzt_diag.py`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-25 10:14 ✨ feat(mzt): 增强 Cloudflare 处理与出口探针功能，优化错误提示与请求头 (5307097)
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-24 23:11 📝 docs(mzt): 更新妹子图链路、403 排查与配置说明 (8d132a4)
+  - `README.md`
+- 2026-10-24 23:11 ✅ test(mzt): 新增离线链路自检与 APP 接口密文 fixture (a3dabbf)
+  - `tools/fixtures/app_post_172250.json`
+  - `tools/selftest_mzt_chain.py`
+- 2026-10-24 23:11 🔧 chore(mzt): 重写诊断脚本为 APP 接口/证书/出口探测 (7f361b0)
+  - `tools/mzt_diag.py`
+- 2026-10-24 23:11 ♻️ refactor(mzt): 移除网页直连，改为 ID→APP 接口→解密链路 (4c44cc2)
+  - `_conf_schema.json`
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `app_core/settings.py`
+  - `features/help.py`
+  - `features/mzt.py`
+  - `main.py`
+  - `metadata.yaml`
+- 2026-10-24 17:33 🐛 fix(astrbot): 修复写真馆图片接口 403 与浏览器兜底失败 (73e10da)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `app_core/settings.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/mzt.py`
+  - `tools/mzt_diag.py`
+- 2026-10-24 16:05 📝 docs(readme): 增加相关项目友链，链接 TRSS-Yunzai 版 sp-plugin (1cb5ea8)
+  - `README.md`
+- 2026-10-24 15:16 🚚 refactor(mzt): 将 mTLS 客户端证书移动到 assets 资源目录 📦 (5fa52d1)
+  - `README.md`
+  - `app_core/mzt.py`
+  - `assets/mzt_client.pem`
+- 2026-10-24 15:12 🔐 feat(mzt): 提交美之图 APP mTLS 客户端证书，克隆后即可获取全量图片 🖼️ (01e5e36)
+  - `.gitignore`
+  - `README.md`
+  - `app_core/mzt_client.pem`
+- 2026-10-24 12:25 ✨ feat(mzt): 接入美之图 APP 全量图片接口（mTLS 证书 + AES-CBC 解密）🖼️ (8f61fca)
+  - `.gitignore`
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/http.py`
+  - `app_core/mzt.py`
+  - `app_core/mzt_crypto.py`
+  - `app_core/settings.py`
+  - `features/help.py`
+  - `features/mzt.py`
+  - `main.py`
+  - `metadata.yaml`
+- 2026-10-24 00:03 🖼️ feat(help): 重做涩批图片帮助为暗黑赛博风长图 (29ba2c6)
+  - `README.md`
+  - `app_core/paths.py`
+  - `app_core/settings.py`
+  - `assets/help.png`
+  - `assets/说明.txt`
+  - `features/help.py`
+- 2026-10-23 16:10 🐛 fix: 修复图片下载被截断与发送体积过大，下载后统一压缩再发送 (307c9d9)
+  - `app_core/http.py`
+  - `app_core/imaging.py`
+  - `features/_base.py`
+  - `requirements.txt`
+- 2026-10-23 00:13 🐛 fix: 修复 PixivBase.download_images 缺少 progress 参数导致套图/写真下载报错 (2cbb7bf)
+  - `features/_pixiv_base.py`
+- 2026-10-23 00:03 🐛 feat: 更新事件处理逻辑，避免多段回复被截断，确保指令正常消费 (94df3bd)
+  - `features/_base.py`
+  - `main.py`
+- 2026-09-28 11:27 🐛 feat: 优化持久化数据目录解析，确保数据迁移与审计可追溯 (9c6e75e)
+  - `app_core/paths.py`
+  - `metadata.yaml`
+- 2026-09-26 11:43 🐛 feat: 增加进度回调功能，优化套图解析和下载过程中的控制台日志输出 (2628d99)
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `features/_base.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+- 2026-09-20 17:54 🐛 feat: 增加持久化数据目录管理，优化套图URL列表的迁移与更新流程 (66c07fb)
+  - `app_core/paths.py`
+  - `features/mtb.py`
+  - `main.py`
+- 2026-09-20 11:51 🐛 feat: 增强调试日志，优化浏览器上下文和下载流程的可追踪性 (1306f72)
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/mtb.py`
+  - `features/_base.py`
+  - `features/mtb.py`
+  - `main.py`
+- 2026-09-19 22:22 🐛 refactor: change debug logs to info level in subscribe and main features (571550e)
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/magnetcat.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/storage.py`
+  - `app_core/verify.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/help.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `main.py`
+- 2026-09-19 22:11 📝 feat: 移除帮助文本中的冗余信息，优化帮助内容格式 (c4f3d8f)
+  - `features/help.py`
+- 2026-09-19 21:59 🐛 feat: add detailed debug logging across various features (418e1b8)
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/magnetcat.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/storage.py`
+  - `app_core/verify.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/help.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `main.py`
+- 2026-09-18 22:56 🐛 feat: 重构渲染逻辑，优化卡片样式与背景渐变，增强可读性与视觉效果 (b696df5)
+  - `app_core/render.py`
+- 2026-09-18 22:42 🐛 feat: 优化类型注解，提升 Pylance 兼容性，避免类型检查错误 (6b1460a)
+  - `app_core/render.py`
+- 2026-09-18 22:32 🐛 feat: 添加中文字体支持与自动安装功能，优化帮助图渲染 (54a76c8)
+  - `app_core/render.py`
+  - `assets/fonts/NotoSansSC-Regular.otf`
+  - `assets/fonts/说明.txt`
+  - `features/help.py`
+  - `main.py`
+- 2026-09-18 21:55 🐛 feat: update help rendering and commands (de870f3)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/filecache.py`
+  - `app_core/magnetcat.py`
+  - `app_core/render.py`
+  - `app_core/settings.py`
+  - `app_core/verify.py`
+  - `features/help.py`
+  - `features/pixiv_tag.py`
+  - `features/recall.py`
+  - `features/urls.py`
+  - `main.py`
+  - `metadata.yaml`
+  - `requirements.txt`
+- 2026-09-18 10:53 🔥 feat: 删除不再使用的帮助图像文件 (d1ce2b1)
+  - `assets/help.jpg`
+- 2026-09-18 01:20 🐛 feat: 在指令处理入口添加日志记录，便于确认指令被插件接收 (4c0117c)
+  - `features/_base.py`
+- 2026-09-18 00:59 feat: 更新功能模块汇总文档，增强结构说明和各模块职责描述 (2e581cc)
+  - `features/__init__.py`
+- 2026-09-18 00:53 🐛 Refactor URL handling and command registration in main.py (1f4e4fc)
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+  - `main.py`
+- 2026-09-18 00:18 feat: 更新插件路径管理，统一数据目录获取方式，增强兼容性 (a879a8e)
+  - `app_core/paths.py`
+  - `main.py`
+- 2026-09-17 23:40 feat: 重构图像指令处理逻辑，简化代码并增强可读性 (6d17428)
+  - `features/cos_images.py`
+  - `features/recall.py`
+- 2026-09-17 22:51 feat: 添加事件停止处理方法，优化指令处理逻辑并更新插件元数据 (b0a7340)
+  - `features/_base.py`
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+  - `main.py`
+  - `metadata.yaml`
+- 2026-09-17 16:03 feat: Update command parsing and help text for various features (ea2c32f)
+  - `README.md`
+  - `app_core/magnetcat.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+  - `metadata.yaml`
+- 2026-09-17 13:19 feat: update command prefixes from '#' to '/' for consistency across features (493469b)
+  - `README.md`
+  - `app_core/magnetcat.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `assets/说明.txt`
+  - `features/__init__.py`
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+  - `main.py`
+  - `metadata.yaml`
+- 2026-09-17 12:06 feat: 重构插件入口，整合功能模块并管理定时任务 (eeb7221)
+  - `features/plugin.py`
+  - `main.py`
+- 2026-09-17 09:49 feat: Refactor video URL handling in plugin paths and features (e2a999c)
+  - `README.md`
+  - `_conf_schema.json`
+  - `app_core/paths.py`
+  - `app_core/settings.py`
+  - `assets/sp_video_urls.json`
+  - `features/plugin.py`
+  - `features/sj.py`
+- 2026-09-14 15:04 Implement code changes to enhance functionality and improve performance (9b04997)
+  - `_conf_schema.json`
+- 2026-09-14 13:23 fix: 更新显示名称以更准确地描述插件版本 (f40596e)
+  - `metadata.yaml`
+- 2026-09-14 13:00 fix: 注释掉不必要的导入以清理代码 (56df6ae)
+  - `app_core/paths.py`
+- 2026-09-14 12:59 fix: 修复导入路径以兼容插件数据目录管理 (e9f1a13)
+  - `app_core/paths.py`
+- 2026-09-14 12:55 fix: 添加类型忽略注释以解决导入问题 (334333d)
+  - `app_core/browser.py`
+  - `app_core/http.py`
+  - `app_core/imaging.py`
+  - `app_core/magnetcat.py`
+  - `app_core/message.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/verify.py`
+  - `features/__init__.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/plugin.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+- 2026-09-14 09:44 feat: Add various features for image and video retrieval (f255b53)
+  - `README.md`
+  - `app_core/__init__.py`
+  - `app_core/browser.py`
+  - `app_core/filecache.py`
+  - `app_core/http.py`
+  - `app_core/imaging.py`
+  - `app_core/magnetcat.py`
+  - `app_core/message.py`
+  - `app_core/mtb.py`
+  - `app_core/mzt.py`
+  - `app_core/paths.py`
+  - `app_core/pixiv.py`
+  - `app_core/scheduler.py`
+  - `app_core/settings.py`
+  - `app_core/storage.py`
+  - `app_core/verify.py`
+  - `assets/help.jpg`
+  - `cmd/__init__.py`
+  - `features/__init__.py`
+  - `features/_base.py`
+  - `features/_pixiv_base.py`
+  - `features/cos_images.py`
+  - `features/help.py`
+  - `features/magnet.py`
+  - `features/mtb.py`
+  - `features/mzt.py`
+  - `features/pixiv_artist.py`
+  - `features/pixiv_pid.py`
+  - `features/pixiv_tag.py`
+  - `features/plugin.py`
+  - `features/recall.py`
+  - `features/sj.py`
+  - `features/subscribe.py`
+  - `features/urls.py`
+  - `main.py`
+  - `metadata.yaml`
+- 2026-09-13 22:09 first commit (298562d)
+  - `.gitignore`
+  - `README.md`
+  - `_conf_schema.json`
+  - `assets/说明.txt`
+  - `cmd/__init__.py`
+  - `cmd/_base.py`
+  - `cmd/_pixiv_base.py`
+  - `cmd/cos_images.py`
+  - `cmd/help.py`
+  - `cmd/magnet.py`
+  - `cmd/mtb.py`
+  - `cmd/mzt.py`
+  - `cmd/pixiv_artist.py`
+  - `cmd/pixiv_pid.py`
+  - `cmd/pixiv_tag.py`
+  - `cmd/plugin.py`
+  - `cmd/recall.py`
+  - `cmd/sj.py`
+  - `cmd/subscribe.py`
+  - `cmd/urls.py`
+  - `core/__init__.py`
+  - `core/browser.py`
+  - `core/filecache.py`
+  - `core/http.py`
+  - `core/imaging.py`
+  - `core/magnetcat.py`
+  - `core/message.py`
+  - `core/mtb.py`
+  - `core/mzt.py`
+  - `core/paths.py`
+  - `core/pixiv.py`
+  - `core/scheduler.py`
+  - `core/settings.py`
+  - `core/storage.py`
+  - `core/verify.py`
+  - `main.py`
+  - `metadata.yaml`
+  - `requirements.txt`
+
+
+</details>

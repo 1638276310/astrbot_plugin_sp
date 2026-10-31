@@ -1,0 +1,85 @@
+name: Release Plugin Zip
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          CODE_VERSION=""
+          if [ -f metadata.yaml ]; then
+            CODE_VERSION=$(grep -E '^version:' metadata.yaml | head -1 | sed -E 's/version:[[:space:]]*//' | tr -d "\"' ")
+          elif [ -f __init__.py ]; then
+            CODE_VERSION=$(grep -E '__version__' __init__.py | head -1 | sed -E 's/.*=[[:space:]]*["'\'']([^"'\'']+)["'\''].*/\1/')
+          fi
+          echo "Tag version: $TAG_VERSION / Code version: $CODE_VERSION"
+          if [ -n "$CODE_VERSION" ] && [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "::error::Tag 版本 ($TAG_VERSION) 与代码版本 ($CODE_VERSION) 不一致，请先修改代码版本号"
+            exit 1
+          fi
+
+      - name: Build plugin zip
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          PLUGIN_NAME="astrbot_plugin_sp"
+          ZIP_NAME="${PLUGIN_NAME}-${VERSION}.zip"
+          git archive --format=zip --prefix="${PLUGIN_NAME}/" -o "${ZIP_NAME}" HEAD
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Generate Changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ] && [ -f CHANGELOG.md ]; then
+            cp CHANGELOG.md /tmp/release_notes.md
+          else
+            if [ -n "$PREV_TAG" ]; then RANGE="${PREV_TAG}..HEAD"; else RANGE="HEAD"; fi
+            FEATS=""; FIXES=""; DOCS=""; REFACTORS=""; CHORES=""; OTHERS=""
+            while IFS= read -r line || [ -n "$line" ]; do
+              CLEAN=$(printf '%s' "$line" | sed -E 's/^[^[:alnum:]]+//')
+              LOWER=$(printf '%s' "$CLEAN" | tr '[:upper:]' '[:lower:]')
+              case "$LOWER" in
+                feat*|feature*) FEATS+="- $line"$'\n' ;;
+                fix*|bugfix*|hotfix*) FIXES+="- $line"$'\n' ;;
+                docs*|doc*) DOCS+="- $line"$'\n' ;;
+                refactor*|perf*|style*) REFACTORS+="- $line"$'\n' ;;
+                chore*|test*|ci*|build*) CHORES+="- $line"$'\n' ;;
+                *) OTHERS+="- $line"$'\n' ;;
+              esac
+            done < <(git log $RANGE --no-merges --pretty=format:"%s (%h)")
+            {
+              if [ -n "$FEATS" ]; then echo "## 🚀 Features"; printf '%s' "$FEATS"; echo; fi
+              if [ -n "$FIXES" ]; then echo "## 🐛 Bug Fixes"; printf '%s' "$FIXES"; echo; fi
+              if [ -n "$DOCS" ]; then echo "## 📝 Documentation"; printf '%s' "$DOCS"; echo; fi
+              if [ -n "$REFACTORS" ]; then echo "## ♻️ Refactors"; printf '%s' "$REFACTORS"; echo; fi
+              if [ -n "$CHORES" ]; then echo "## 🔧 Chores"; printf '%s' "$CHORES"; echo; fi
+              if [ -n "$OTHERS" ]; then echo "## 📦 Others"; printf '%s' "$OTHERS"; echo; fi
+            } > /tmp/release_notes.md
+          fi
+          {
+            echo "RELEASE_NOTES<<EOF"
+            cat /tmp/release_notes.md
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          body: ${{ env.RELEASE_NOTES }}
+          files: ${{ env.ZIP_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

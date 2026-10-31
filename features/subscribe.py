@@ -1,0 +1,249 @@
+"""画师订阅与推送。
+
+对应原 ``dingyue.js`` + ``dingyue_Auto_update.js``：
+
+* ``/订阅画师 <ID>`` / ``/取消订阅 <ID>`` / ``/订阅列表``
+* ``/sp推送`` / ``/关闭sp推送``
+* 定时检查更新并推送到开启了推送的会话
+
+原插件用群号作为 key（Yunzai 只能在群里用），AstrBot 版同时支持群聊与私聊，
+key 为群号或私聊用户 ID。
+
+指令 handler 由主类 main.py 注册（与 get_px 同构），
+本文件保留解析正则与存储 / 推送逻辑。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import random
+import re
+from typing import Any
+
+from astrbot.api import logger  # 使用 astrbot 提供的 logger 接口 # type: ignore
+
+from ..app_core.imaging import add_noise, save_bytes
+from ..app_core.storage import JsonStore
+from ._base import spFeature
+
+SUBSCRIBE_PAT = re.compile(r"订阅画师\s*(\d+)")
+UNSUBSCRIBE_PAT = re.compile(r"取消订阅\s*(\d+)")
+
+PUSH_MAX_WORKS = 3
+PUSH_INTERVAL_SECONDS = 10
+
+
+def empty_session() -> dict[str, Any]:
+    """返回一个空的会话订阅记录。"""
+    return {"pushEnabled": False, "artists": {}, "umo": ""}
+
+
+class SubscribeFeature(spFeature):
+    """订阅相关存储与推送逻辑（指令 handler 由主类 main.py 注册）。"""
+
+    # ------------------------------------------------------------------ #
+    # 存储
+    # ------------------------------------------------------------------ #
+    def store(self) -> JsonStore:
+        """订阅数据存储（惰性创建，全插件共用一份）。"""
+        store = getattr(self, "_subscribe_store", None)
+        if store is None:
+            store = JsonStore(self.paths.subscribe_file, {})
+            self._subscribe_store = store
+        return store
+
+    def load_data(self) -> dict[str, Any]:
+        """读取全部会话订阅记录，数据损坏时返回空字典。"""
+        data = self.store().load()
+        if isinstance(data, dict):
+            logger.info(
+                f"[涩批DEBUG] load_data：读到 {len(data)} 个会话订阅记录"
+            )
+        else:
+            logger.info("[涩批DEBUG] load_data：数据为空或损坏，返回空字典")
+        return data if isinstance(data, dict) else {}
+
+    def save_data(self, data: dict[str, Any]) -> None:
+        """保存全部会话订阅记录。"""
+        self.store().set(data, persist=True)
+        logger.info(f"[涩批DEBUG] save_data：已保存 {len(data)} 个会话订阅记录")
+
+    # ------------------------------------------------------------------ #
+    # 定时推送
+    # ------------------------------------------------------------------ #
+    async def push_updates(self) -> None:
+        """检查所有订阅画师的更新并推送（供调度器调用）。"""
+        logger.info("[涩批DEBUG] push_updates：开始检查画师订阅更新")
+        data = self.load_data()
+        if not data:
+            logger.info("[涩批DEBUG] push_updates：没有订阅数据，跳过")
+            return
+
+        artist_ids: list[str] = []
+        for entry in data.values():
+            artists = entry.get("artists") or {}
+            artist_ids.extend(str(key) for key in artists)
+
+        unique_ids = list(dict.fromkeys(artist_ids))
+        if not unique_ids:
+            logger.info("[涩批DEBUG] push_updates：会话中没有画师订阅，跳过")
+            return
+
+        logger.info(
+            f"[涩批DEBUG] push_updates：共 {len(unique_ids)} 个画师待检查：{unique_ids}"
+        )
+        updates = await self.pixiv.fetch_updates(unique_ids)
+        if not updates:
+            logger.info("[涩批DEBUG] push_updates：没有发现任何新作品")
+            return
+
+        logger.info(
+            f"[涩批DEBUG] push_updates：共 {len(updates)} 个画师有新作品："
+            + ", ".join(f"{k}({len(v)})" for k, v in updates.items())
+        )
+
+        for session, entry in data.items():
+            if not entry.get("pushEnabled"):
+                continue
+            umo = entry.get("umo") or ""
+            if not umo:
+                logger.info(
+                    f"[涩批DEBUG] push_updates：会话 {session} 未设置 umo，跳过"
+                )
+                continue
+            artists = entry.get("artists") or {}
+            for artist_id, artist_name in artists.items():
+                new_works = updates.get(str(artist_id)) or []
+                if not new_works:
+                    continue
+                for work_id in new_works[:PUSH_MAX_WORKS]:
+                    logger.info(
+                        f"[涩批DEBUG] push_updates：推送 {artist_name}({artist_id}) "
+                        f"的新作品 {work_id} -> {umo}"
+                    )
+                    try:
+                        await self._push_work(umo, artist_id, artist_name, work_id)
+                    except Exception as exc:
+                        logger.warning(
+                            f"[涩批] 推送作品 {work_id} 失败: {exc}"
+                        )
+                    await asyncio.sleep(PUSH_INTERVAL_SECONDS)
+
+    async def _push_work(
+        self,
+        umo: str,
+        artist_id: str,
+        artist_name: str,
+        work_id: str,
+    ) -> None:
+        """推送单个新作品到指定会话。"""
+        from astrbot.api.event import MessageChain # type: ignore
+        from astrbot.api.message_components import Image # type: ignore
+
+        logger.info(f"[涩批DEBUG] _push_work：开始获取作品 {work_id}")
+        details = await self.pixiv.fetch_illust(work_id)
+        if not details or not details.get("body"):
+            logger.info(f"[涩批DEBUG] _push_work：作品 {work_id} 无详情数据")
+            return
+        body = details["body"]
+        urls = self._image_urls(body)
+        if not urls:
+            logger.info(f"[涩批DEBUG] _push_work：作品 {work_id} 无图片地址")
+            return
+
+        logger.info(f"[涩批DEBUG] _push_work：作品 {work_id} 共 {len(urls)} 张图片")
+        paths = await self._download_push_images(urls)
+        if not paths:
+            logger.info(f"[涩批DEBUG] _push_work：作品 {work_id} 图片全部下载失败")
+            return
+
+        text = "\n".join(
+            [
+                f"爷爷，您关注的画师：{body.get('userName', artist_name)}"
+                f"（{body.get('userId', artist_id)}）更新了",
+                f"作品：{body.get('illustTitle', '')}",
+                f"PID：{body.get('illustId', work_id)}",
+                f"是否AI：{'是' if body.get('aiType') == 2 else '否'}",
+                f"上传时间：{body.get('createDate', '')}",
+                f"♥：{body.get('likeCount', 0)} "
+                f"😊：{body.get('bookmarkCount', 0)} "
+                f"👁：{body.get('viewCount', 0)}",
+                f"标签：{self._tags(body)}",
+            ]
+        )
+        chain = MessageChain().message(text)
+        for path in paths:
+            chain.chain.append(Image.fromFileSystem(path))
+        logger.info(
+            f"[涩批DEBUG] _push_work：发送 {len(paths)} 张图片 -> {umo}"
+        )
+        await self.context.send_message(umo, chain)  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------ #
+    # 工具
+    # ------------------------------------------------------------------ #
+    async def _download_push_images(self, urls: list[str]) -> list[str]:
+        semaphore = asyncio.Semaphore(self.settings.max_concurrent_download)
+        results: list[str | None] = [None] * len(urls)
+
+        async def worker(index: int, url: str) -> None:
+            """下载并处理单张推送图片，保存后按原索引写回结果。"""
+            async with semaphore:
+                data = await self.file_cache.get(
+                    url, timeout=self.settings.download_timeout
+                )
+                if not data:
+                    logger.info(
+                        f"[涩批DEBUG] _download_push_images：第 {index + 1}/{len(urls)} 张下载失败：{url[:80]}"
+                    )
+                    return
+                if self.settings.track_pixel:
+                    data = add_noise(data)
+                target = self.temp_path(
+                    f"push_{index}_{random.randint(1000, 9999)}.jpg"
+                )
+                try:
+                    save_bytes(target, data)
+                except OSError as exc:
+                    logger.info(
+                        f"[涩批DEBUG] _download_push_images：第 {index + 1}/{len(urls)} 张保存失败：{exc!r}"
+                    )
+                    return
+                results[index] = str(target)
+
+        await asyncio.gather(*(worker(i, url) for i, url in enumerate(urls)))
+        paths = [path for path in results if path]
+        logger.info(
+            f"[涩批DEBUG] _download_push_images：成功下载 {len(paths)}/{len(urls)} 张"
+        )
+        return paths
+
+    @staticmethod
+    def _image_urls(body: dict) -> list[str]:
+        urls = body.get("urls")
+        if not isinstance(urls, dict):
+            return []
+        return [str(value) for value in urls.values() if value]
+
+    @staticmethod
+    def _tags(body: dict) -> str:
+        container = body.get("tags") or {}
+        if not isinstance(container, dict):
+            return ""
+        items = container.get("tags") or []
+        return ", ".join(
+            str(item.get("tag"))
+            for item in items
+            if isinstance(item, dict) and item.get("tag")
+        )
+
+    @property
+    def pixiv(self):
+        """Pixiv 客户端（惰性创建，订阅推送专用）。"""
+        from ..app_core.pixiv import PixivClient
+
+        client = getattr(self, "_subscribe_pixiv_client", None)
+        if client is None:
+            client = PixivClient(self.settings)
+            self._subscribe_pixiv_client = client
+        return client
